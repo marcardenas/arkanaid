@@ -179,21 +179,38 @@ const LEVELS = [
 
 // Lo que desbloquea superar cada nivel de la campaña por primera vez.
 const CAMPAIGN_REWARDS = {
-  1:  { icon: '🌳', name: 'Árbol de habilidades',  desc: 'Elige una clase y gasta tus PH', key: 'tree' },
-  2:  { icon: '∞',  name: 'Modo Infinito',         desc: 'Niveles procedurales sin fin', key: 'endless' },
+  1:  { icon: '🎁', name: 'Cofre de bienvenida',   desc: '+200 monedas para la tienda', bonus: { coins: 200 } },
+  2:  { icon: '🧲', name: 'Imán leve',             desc: 'Monedas y cápsulas se acercan un poco a la paleta', fx: { magnet: 0.3 } },
   3:  { icon: '🎛', name: 'Segunda ranura',        desc: 'Equipa dos habilidades activas (Q y E)', key: 'slot2' },
-  4:  { icon: '📅', name: 'Desafío diario',        desc: 'Un nivel nuevo cada día', key: 'daily' },
-  5:  { icon: '☠',  name: 'Modo Rogue',            desc: 'Arkanoid + roguelike', key: 'rogue' },
+  4:  { icon: '⏱', name: 'Persistencia',          desc: '+10% de duración de power-ups', fx: { duration: 0.1 } },
+  5:  { icon: '💰', name: 'Botín del Guardián',    desc: '+300 monedas', bonus: { coins: 300 } },
   6:  { icon: '🎨', name: 'Estilos',               desc: 'Bolas y paletas nuevas en la tienda', key: 'skins' },
   7:  { icon: '❤',  name: 'Corazón de campaña',    desc: '+1 vida inicial en todos los modos', fx: { lives: 1 } },
   8:  { icon: '🛒', name: 'Mejoras avanzadas',     desc: 'Red de seguridad, Ventaja inicial, Fiebre y Láser rápido en la tienda', key: 'advshop' },
   9:  { icon: '📈', name: 'Techo de combo',        desc: '+1 al multiplicador máximo de combo', fx: { comboCap: 1 } },
-  10: { icon: '🧱', name: 'Muro veterano',         desc: '+1 barrera al empezar cada nivel', fx: { barrier: 1 } },
+  10: { icon: '🌳', name: 'Árbol de habilidades',  desc: 'Fin del capítulo 1: elige una clase y gasta tus PH', key: 'tree' },
   11: { icon: '🪙', name: 'Bolsillos hondos',      desc: '+10% de valor de monedas', fx: { coinVal: 0.1 } },
   12: { icon: '🪂', name: 'Paracaídas',            desc: 'Las cápsulas caen 25% más lento', fx: { capSlow: 0.25 } },
   13: { icon: '🏅', name: 'Renombre',              desc: '+10% de puntos', fx: { score: 0.1 } },
   14: { icon: '⚪', name: 'Compañera',             desc: '25% de empezar cada nivel con una bola extra', fx: { twin: 0.25 } },
-  15: { icon: '👑', name: 'Leyenda de la campaña', desc: '+500 monedas, +5 PH y la paleta Oro', bonus: true },
+  15: { icon: '👑', name: 'Trofeo del Supremo',    desc: '+500 monedas, +5 PH y la paleta Oro', bonus: { coins: 500, ph: 5, paddle: 'gold' } },
+  20: { icon: '∞',  name: 'Modo Infinito',         desc: 'Fin de la campaña 2: niveles procedurales sin fin', key: 'endless' },
+  25: { icon: '🎯', name: 'Precisión',             desc: '+5% de golpe crítico', fx: { crit: 0.05 } },
+  30: { icon: '📅', name: 'Desafío diario',        desc: 'Fin de la campaña 3: un nivel nuevo cada día', key: 'daily' },
+  35: { icon: '🧱', name: 'Escudo eterno',         desc: '+1 barrera al empezar cada nivel', fx: { barrier: 1 } },
+  40: { icon: '☠',  name: 'Modo Rogue',            desc: 'Fin de la campaña 4: Arkanoid + roguelike, +1000 monedas', key: 'rogue', bonus: { coins: 1000 } },
+};
+
+// Tutorial: un nivel guiado por pasos. Desbloquea la campaña, el árbol y da PH.
+const TUTORIAL = {
+  name: 'Tutorial',
+  rows: [
+    '.............',
+    '..ccccccccc..',
+    '..bb?bbXbbb..',
+    '..gggCggggg..',
+  ],
+  reward: { ph: 5 },
 };
 
 // Objetivos de estrellas: ★1 por superar el nivel, ★2 y ★3 por cumplir sus dos objetivos.
@@ -381,3 +398,45 @@ function genLevel(n, rng) {
   const names = ['Sector', 'Cuadrante', 'Zona', 'Núcleo', 'Anillo', 'Matriz', 'Vórtice'];
   return { name: `${pick(names)} ${n}`, rows: grid.map(r => r.join('')) };
 }
+
+// ---------- Campañas ----------
+// La campaña se divide en 4 campañas de 10 niveles; al terminar cada una se desbloquea algo grande.
+const CAMPAIGNS = [
+  { name: 'El despertar', from: 1, to: 10, unlock: 'tree' },
+  { name: 'La forja', from: 11, to: 20, unlock: 'endless' },
+  { name: 'El abismo', from: 21, to: 30, unlock: 'daily' },
+  { name: 'El trono', from: 31, to: 40, unlock: 'rogue' },
+];
+const campaignOf = n => CAMPAIGNS.findIndex(c => n >= c.from && n <= c.to);
+
+// Niveles 16–40: generados con semilla fija (siempre iguales) y con objetivos propios.
+(function extendCampaign() {
+  const NAMES = {
+    1: ['Fundición', 'Yunque', 'Crisol', 'Engranajes', 'Escoria'],
+    2: ['Grieta', 'Sima', 'Marea negra', 'Ecos', 'Profundidad', 'Penumbra', 'Raíces', 'Vacío', 'Hielo negro'],
+    3: ['Antesala', 'Guardia real', 'Pasillo de espejos', 'Bóveda', 'Salón de cristal', 'Armería', 'Escalinata', 'Coronación', 'Último umbral'],
+  };
+  const used = {};
+  for (let n = LEVELS.length + 1; n <= 40; n++) {
+    const rng = mulberry32(hashStr('arkanaid-campaign-' + n));
+    const def = genLevel(n, rng);
+    const ci = campaignOf(n);
+    if (def.boss) {
+      if (n === 40) { def.boss = 9; def.name = 'JEFE FINAL: Señor Supremo'; }
+      def.obj = [{ type: 'bossTime', n: 90 + def.boss * 12 }, { type: n % 2 ? 'noHit' : 'noDeath' }];
+    } else {
+      used[ci] = (used[ci] || 0);
+      def.name = NAMES[ci][used[ci]++ % NAMES[ci].length];
+      const bricks = def.rows.join('').replace(/[.M]/g, '').length;
+      const pool = [
+        { type: 'combo', n: 8 + Math.floor(n / 3) }, { type: 'noDeath' }, { type: 'powerups', n: 2 + Math.floor(n / 15) },
+        { type: 'multiball', n: 3 + Math.floor(n / 20) }, { type: 'coins', n: 8 + Math.floor(n / 5) }, { type: 'slice', n: 4 + Math.floor(n / 8) },
+        { type: 'fever', n: 1 + Math.floor(n / 25) }, { type: 'score', n: 5000 + n * 600 }, { type: 'time', n: Math.round(35 + bricks * 1.1) },
+      ];
+      const a = pool.splice((n * 4) % pool.length, 1)[0];
+      const b = pool.splice((n * 7 + 2) % pool.length, 1)[0];
+      def.obj = [a, b];
+    }
+    LEVELS.push(def);
+  }
+})();

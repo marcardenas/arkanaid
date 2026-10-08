@@ -1,7 +1,7 @@
 // Pantallas DOM superpuestas al canvas: menú, tienda, logros, pausa, resultados.
 const UI = (() => {
   const $ = s => document.querySelector(s);
-  const SCREENS = ['menu', 'levels', 'shop', 'ach', 'settings', 'howto', 'pause', 'clear', 'over', 'victory', 'rogue', 'tree', 'profile', 'brief'];
+  const SCREENS = ['menu', 'levels', 'shop', 'ach', 'settings', 'howto', 'pause', 'clear', 'over', 'victory', 'rogue', 'tree', 'profile', 'brief', 'tutdone'];
   const fmt = n => Math.floor(n).toLocaleString('es-CL');
   const coin = '<i class="coin-ico"></i>';
   let current = null, backTo = 'menu', shopTab = 'upgrades', treeSel = null;
@@ -157,16 +157,22 @@ const UI = (() => {
       const st = d.streak.count || 1;
       $('#m-streak').textContent = `${st} día${st > 1 ? 's' : ''}`;
       const next = Math.min(d.unlocked, Game.CAMPAIGN_LEN);
-      $('#m-camp').textContent = `Nivel ${next}`;
+      const nci = campaignOf(next);
+      $('#m-camp').textContent = `Campaña ${nci + 1} · Nivel ${next - CAMPAIGNS[nci].from + 1}`;
       $('#m-stars').textContent = `${Game.totalStars()}/${Game.CAMPAIGN_LEN * 3} ★`;
       $('#m-endless').textContent = d.endlessBest ? `Récord ${fmt(d.endlessBest)} · N${d.endlessBestLevel}` : 'Sin límite';
       const today = d.daily.date === Game.todayStr() ? d.daily.best : 0;
       $('#m-daily').textContent = today ? `Hoy: ${fmt(today)}` : 'Nuevo desafío hoy';
+      const tdone = !!d.tutorial;
+      $('#tutBtn').style.display = tdone ? 'none' : '';
+      for (const b of ['#campBtn', '#levelsBtn']) { $(b).disabled = !tdone; $(b).classList.toggle('locked', !tdone); }
+      $('#campBtn').classList.toggle('primary', tdone);
+      if (!tdone) { $('#m-camp').textContent = '🔒 Completa el tutorial'; $('#m-stars').textContent = '🔒'; }
       const gate = (btn, small, key, text) => {
         const open = Unlocks.has(key);
         $(btn).disabled = !open;
         $(btn).classList.toggle('locked', !open);
-        if (!open) $(small).textContent = `🔒 Supera el nivel ${Unlocks.levelOf(key)}`;
+        if (!open) $(small).textContent = `🔒 ${Unlocks.lockText(key)}`;
         else if (text != null) $(small).textContent = text;
       };
       gate('#endlessBtn', '#m-endless', 'endless');
@@ -174,7 +180,7 @@ const UI = (() => {
       const rb = $('#rogueBtn'), ok = Rogue.unlocked();
       rb.disabled = !ok;
       rb.classList.toggle('locked', !ok);
-      $('#m-rogue').textContent = !ok ? '🔒 Vence el nivel 5' : Rogue.hasSave() ? `Run en curso · Acto ${d.rogueRun.act}` : d.rogue.wins ? `${d.rogue.wins} victoria${d.rogue.wins > 1 ? 's' : ''}` : 'Roguelike';
+      $('#m-rogue').textContent = !ok ? `🔒 ${Unlocks.lockText('rogue')}` : Rogue.hasSave() ? `Run en curso · Acto ${d.rogueRun.act}` : d.rogue.wins ? `${d.rogue.wins} victoria${d.rogue.wins > 1 ? 's' : ''}` : 'Roguelike';
       const lv = Progress.level();
       $('#m-level').textContent = lv;
       $('#m-xp').style.width = `${Progress.xp() / Progress.need(lv) * 100}%`;
@@ -186,7 +192,7 @@ const UI = (() => {
       const treeOpen = Unlocks.has('tree');
       $('#treeBtn').disabled = !treeOpen;
       $('#treeBtn').classList.toggle('locked', !treeOpen);
-      if (!treeOpen) $('#m-tree').textContent = '🔒 Supera el nivel 1';
+      if (!treeOpen) $('#m-tree').textContent = `🔒 ${Unlocks.lockText('tree')}`;
       $('#treeBtn').classList.toggle('notify', treeOpen && (!cl || Skills.anyAffordable()));
       const n = Object.keys(d.achievements).length;
       $('#m-ach').textContent = `${n}/${ACHIEVEMENTS.length}`;
@@ -196,15 +202,25 @@ const UI = (() => {
 
     levels() {
       const d = Save.d;
+      const chapters = CAMPAIGNS.map((c, i) => {
+        const r = CAMPAIGN_REWARDS[c.to], done = Unlocks.cleared(c.to);
+        const st = Object.entries(d.stars).filter(([k]) => +k >= c.from && +k <= c.to).reduce((a, [, v]) => a + v, 0);
+        return [c.from, c.to, `Campaña ${i + 1} · ${c.name}`, `${st}/${(c.to - c.from + 1) * 3} ★ · ${done ? '✓' : '🔒'} ${r.icon} ${r.name}`];
+      });
       $('#lv-grid').innerHTML = LEVELS.map((l, i) => {
         const n = i + 1, locked = n > d.unlocked, st = d.stars[n] || 0;
+        const ch = chapters.find(c => c[0] === n);
+        const head = ch ? `<div class="chapter"><b>${ch[2]}</b><small>${ch[3]}</small></div>` : '';
+        return head + tile(l, n, locked, st);
+      }).join('');
+      function tile(l, n, locked, st) {
         return `<button class="lv ${l.boss ? 'boss' : ''} ${locked ? 'locked' : ''}" data-act="brief" data-level="${n}" ${locked ? 'disabled' : ''}>
           <b>${locked ? '🔒' : l.boss ? '☠' : n}</b>
           <span class="lv-name">${l.boss ? 'JEFE' : l.name}</span>
           <span class="stars">${'★'.repeat(st)}<em>${'★'.repeat(3 - st)}</em></span>
           ${CAMPAIGN_REWARDS[n] ? `<i class="lv-reward ${st ? 'got' : ''}" title="${CAMPAIGN_REWARDS[n].name}: ${CAMPAIGN_REWARDS[n].desc}">${CAMPAIGN_REWARDS[n].icon}</i>` : ''}
         </button>`;
-      }).join('');
+      }
     },
 
     shop() {
@@ -368,13 +384,23 @@ const UI = (() => {
 
   function showBrief(n) {
     const l = LEVELS[n - 1], st = Save.d.stars[n] || 0, rw = CAMPAIGN_REWARDS[n];
-    $('#b-num').textContent = l.boss ? `Nivel ${n} · Jefe` : `Nivel ${n}`;
+    const ci = campaignOf(n);
+    $('#b-num').textContent = `Campaña ${ci + 1} · Nivel ${n - CAMPAIGNS[ci].from + 1}${l.boss ? ' · Jefe' : ''}`;
     $('#b-name').textContent = l.name.replace('JEFE: ', '');
     $('#b-stars').innerHTML = [0, 1, 2].map(i => `<span class="${i < st ? 'on' : ''}" style="animation-delay:${0.1 + i * 0.12}s">★</span>`).join('');
     $('#b-objs').innerHTML = objList(n);
     $('#b-reward').innerHTML = rw ? `<div class="unlock-card ${st ? 'claimed' : ''}"><span class="u-ico">${rw.icon}</span><div><small>${st ? 'YA DESBLOQUEADO' : 'PREMIO AL SUPERARLO'}</small><b>${rw.name}</b><em>${rw.desc}</em></div></div>` : '';
     $('#b-play').dataset.level = n;
     show('brief');
+  }
+
+  function showTutorialDone(r) {
+    $('#td-sub').textContent = r.first ? 'Ya sabes lo básico. Esto es lo que desbloqueaste:' : 'Repasaste lo básico. ¡Bien hecho!';
+    const items = r.first
+      ? [['▶', 'Campañas', `${CAMPAIGNS.length} campañas de 10 niveles con jefes y estrellas`], ['✨', `+${r.ph} puntos de habilidad`, 'Guárdalos: el árbol se abre al terminar la campaña 1']]
+      : [];
+    $('#td-list').innerHTML = items.map(([i, t, s]) => `<div class="obj got new"><span class="st">★</span><span class="oi">${i}</span><span><b>${t}</b> · ${s}</span></div>`).join('');
+    show('tutdone');
   }
 
   function showPause() {
@@ -458,7 +484,8 @@ const UI = (() => {
 
   // ---------- Acciones ----------
   const actions = {
-    campaign: () => Game.startRun('campaign', Math.min(Save.d.unlocked, Game.CAMPAIGN_LEN)),
+    campaign: () => (Save.d.tutorial ? Game.startRun('campaign', Math.min(Save.d.unlocked, Game.CAMPAIGN_LEN)) : Game.startTutorial()),
+    tutorial: () => Game.startTutorial(),
     'play-level': ds => Game.startRun('campaign', +ds.level),
     brief: ds => showBrief(+ds.level),
     endless: () => Game.startRun('endless', 1),
@@ -471,6 +498,7 @@ const UI = (() => {
     back: () => (backTo === 'rogue' ? Rogue.render() : show(backTo)),
     rogue: () => Rogue.hub(),
     tree: () => {
+      if (!Unlocks.has('tree')) return;
       Object.assign(tv, { x: 0, y: 0, z: 1 });
       clsPickerOpen = false;
       open('tree');
@@ -617,16 +645,17 @@ const UI = (() => {
   }
 
   function boot() {
+    if (!Save.d.tutorial && Object.values(Save.d.stars).some(v => v > 0)) { Save.d.tutorial = true; Save.save(); }
     Theme.apply(Save.d.themes.current);
     Theme.checkNew();
     claimDaily();
     const old = Skills.syncCampaign();
     if (old) { Save.save(); setTimeout(() => toast(`🌳 +${old} PH`, 'Por tu progreso en la campaña. ¡Revisa el árbol de habilidades!'), 1400); }
     show('menu');
-    if (!Save.d.seenHowto) { Save.d.seenHowto = true; Save.save(); backTo = 'menu'; show('howto'); }
+    if (!Save.d.tutorial) setTimeout(() => toast('👋 ¡Bienvenido a Arkanaid!', 'Empieza por el tutorial: desbloquea la campaña y el árbol'), 900);
   }
 
-  return { announceThemes, show, hideAll, showPause, showClear, showOver, showVictory, toast, boot };
+  return { showTutorialDone, announceThemes, show, hideAll, showPause, showClear, showOver, showVictory, toast, boot };
 })();
 
 Game.boot();

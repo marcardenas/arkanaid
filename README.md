@@ -26,13 +26,14 @@ y entra a http://localhost:8000. Funciona en escritorio y en el celular.
 
 ## Modos
 
-- **Campaña:** 15 niveles hechos a mano con 3 jefes y **3 estrellas por nivel**. La ★1 es por superarlo y la ★2 y ★3 son por cumplir sus dos objetivos propios.
+- **🎓 Tutorial:** un nivel guiado de 8 pasos (mover, lanzar, combo, slice, cápsulas, monedas, habilidad y despejar). Al completarlo se desbloquea la campaña y recibes +5 PH.
+- **Campaña:** 4 campañas de 10 niveles (40 en total) con jefes cada 5 niveles y **3 estrellas por nivel**. La ★1 es por superarlo y la ★2 y ★3 son por cumplir sus dos objetivos propios.
   - **Ejemplos de objetivos:** tiempo límite, sin perder vidas, combo N, N bolas a la vez, ladrillos destruidos con explosiones o con bola curva, activar la FIEBRE, drones, monedas, puntaje, o no recibir disparos del jefe.
   - **Progreso:** los objetivos cumplidos se guardan entre intentos, así que puedes volver por la estrella que te falta.
   - **Dónde se ven:** en el HUD mientras juegas, en la pausa, en el resultado y en la ficha del nivel antes de jugar.
 - **Infinito:** niveles procedurales simétricos que se ponen más difíciles, con un jefe cada 5 niveles.
 - **Desafío diario:** la misma semilla para todos ese día, con 2 vidas y sin continuar.
-- **☠ Modo Rogue** (se desbloquea al vencer al primer jefe, en el nivel 5): Arkanoid + roguelike.
+- **☠ Modo Rogue** (se desbloquea al terminar la campaña 4): Arkanoid + roguelike.
   - **Mapa:** 3 actos con caminos que se bifurcan, al estilo de *Slay the Spire*. Cada sala es un combate, una élite, un evento, una tienda, un descanso, un tesoro o un jefe.
   - **Muerte permanente:** las vidas no se recuperan entre niveles. Si sales de un nivel a la mitad, pierdes una vida.
   - **26 reliquias:** comunes, raras y legendarias que se combinan entre sí (Hidra, Eco, Fénix, Cañón eterno…), más 4 maldiciones.
@@ -51,28 +52,20 @@ Hay 5 temas desbloqueables que cambian todo el juego: fondo animado, ladrillos, 
 | 🌅 Synthwave 80s | Sol a rayas y cuadrícula en perspectiva | Superar el nivel 6 |
 | 👾 Pixel CRT | Render en baja resolución, líneas de escaneo y fuente de 8 bits | 500 monedas |
 | 🌸 Pastel minimal | Tema claro y redondeado | Nivel de cuenta 8 |
-| 💠 Tron holográfico | Ladrillos de contorno de luz y red hexagonal | Completar la campaña |
+| 💠 Tron holográfico | Ladrillos de contorno de luz y red hexagonal | Terminar las 4 campañas |
 
 ## Progresión
 
-- **🔓 Desbloqueos de campaña:** cada nivel superado por primera vez desbloquea algo útil. El orden es:
-  1. Árbol de habilidades
-  2. Modo Infinito
-  3. Segunda ranura de habilidad
-  4. Desafío diario
-  5. Modo Rogue
-  6. Estilos
-  7. +1 vida
-  8. Mejoras avanzadas de tienda
-  9. +1 al combo máximo
-  10. +1 barrera
-  11. +10% de monedas
-  12. Cápsulas más lentas
-  13. +10% de puntos
-  14. Bola extra
-  15. 500 monedas, 5 PH y la paleta Oro
+- **🔓 Desbloqueos de campaña:** el tutorial abre la campaña. Al terminar cada campaña se desbloquea algo grande, y muchos niveles intermedios dan premios (ranuras, estilos, bonos permanentes, monedas):
 
-  La pantalla de niveles muestra el premio de cada uno.
+  | Campaña | Niveles | Al terminarla |
+  |---|---|---|
+  | 1 · El despertar | 1–10 | 🌳 Árbol de habilidades |
+  | 2 · La forja | 11–20 | ∞ Modo Infinito |
+  | 3 · El abismo | 21–30 | 📅 Desafío diario |
+  | 4 · El trono | 31–40 | ☠ Modo Rogue + 1.000 monedas |
+
+  La pantalla de niveles muestra el premio de cada nivel y el de cada campaña.
 - **⬆ Nivel de cuenta:** ganas experiencia en todos los modos (por puntaje, niveles superados y jefes). Cada nivel da PH y monedas, y algunos niveles traen hitos:
   - Nv 5: +5% de puntos
   - **Nv 10: clase secundaria.** Da su bono al 50%, su habilidad y un segundo punto de partida en el árbol.

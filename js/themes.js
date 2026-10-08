@@ -51,7 +51,7 @@ const THEMES = {
   },
   tron: {
     name: 'Tron holográfico', icon: '💠', desc: 'Contornos de luz sobre una red hexagonal',
-    unlock: { type: 'campaign', level: 15 },
+    unlock: { type: 'campaign', level: 40 },
     bg: 'tron', bricks: 'outline', glow: 1.5, pixel: false,
     font: '"Orbitron", system-ui, sans-serif', fontScale: 1,
     colors: remap(['#ff3864', '#ff7a00', '#ffd000', '#00ff9c', '#00e5ff', '#2f7bff', '#b84dff', '#e6fdff',
@@ -77,7 +77,7 @@ const Theme = (() => {
 
   function lockText(id) {
     const u = THEMES[id].unlock;
-    if (u.type === 'campaign') return u.level >= LEVELS.length ? 'Completa la campaña' : `Supera el nivel ${u.level}`;
+    if (u.type === 'campaign') return u.level >= LEVELS.length ? 'Termina las 4 campañas' : `Supera el nivel ${u.level}`;
     if (u.type === 'account') return `Llega al nivel de cuenta ${u.level}`;
     if (u.type === 'coins') return `${u.cost} monedas`;
     return '';

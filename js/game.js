@@ -116,6 +116,7 @@ const Game = (() => {
 
   // ---------- Niveles ----------
   function levelDef() {
+    if (run.mode === 'tutorial') return TUTORIAL;
     if (run.mode === 'campaign' || run.mode === 'demo') return LEVELS[(run.level - 1) % CAMPAIGN_LEN];
     return genLevel(run.level, run.rng);
   }
@@ -176,6 +177,7 @@ const Game = (() => {
       name: def.name, boss: !!def.boss, startScore: run.score, warped: false,
       destructible: bricks.filter(b => !b.metal).length, mods: run.mods || [],
     };
+    if (run.mode === 'tutorial') resetTutorial();
     computeRelicBonus();
     chain = Math.floor(bon('comboStart'));
     resetActives();
@@ -204,7 +206,7 @@ const Game = (() => {
     }
     const modTxt = lvl.mods.map(m => ROGUE_MODS[m].icon + ' ' + ROGUE_MODS[m].name).join('  ');
     banner = {
-      text: run.mode === 'rogue' ? run.label : run.mode === 'campaign' ? `NIVEL ${run.level}/${CAMPAIGN_LEN}` : `NIVEL ${run.level}`,
+      text: run.mode === 'rogue' ? run.label : run.mode === 'campaign' ? `CAMPAÑA ${campaignOf(run.level) + 1} · ${run.level - CAMPAIGNS[campaignOf(run.level)].from + 1}/10` : `NIVEL ${run.level}`,
       sub: modTxt ? `${def.name} · ${modTxt}` : def.name, t: lvl.obj ? 3.2 : 2.4, color: boss ? '#ff4d6d' : lvl.mods.length ? '#ff8c42' : '#7c5cff',
       objs: lvl.obj,
     };
@@ -251,7 +253,7 @@ const Game = (() => {
       aimFromPaddle(b, b.stuckOff / (paddle.w / 2) + rnd(-0.08, 0.08));
       any = true;
     }
-    if (any) Sfx.launch();
+    if (any) { Sfx.launch(); if (tut) tut.launched = true; }
     return any;
   }
 
@@ -303,6 +305,7 @@ const Game = (() => {
     b.spin = Math.abs(paddle.vx) > 150 ? clamp(paddle.vx / 1400 * (1 + bon('spin')), -spinMax, spinMax) : 0;
     b.rescued = false;
     if (Math.abs(b.spin) > 0.9) {
+      if (tut) tut.sliced = true;
       floater(b.x, PADDLE_Y - 24, '¡CURVA!', '#7cf7ff', 14);
       Sfx.slice();
     }
@@ -551,8 +554,11 @@ const Game = (() => {
   let actSlowT = 0, beamT = 0, beamTick = 0;
   const actCd = [0, 0, 0];
   const ACT_Y = [PADDLE_Y - 96, PADDLE_Y - 96, PADDLE_Y - 154], ACT_X = [FL + 30, FR - 30, FL + 30];
-  const actCdMax = id => ACTIVES[id].cd * (1 - Math.min(0.6, bon('cdr')));
-  function actSlots() { return live() ? Skills.equipped() : []; }
+  const actCdMax = id => (tut ? 6 : ACTIVES[id].cd * (1 - Math.min(0.6, bon('cdr'))));
+  function actSlots() {
+    if (tut) return tut.step >= TUT_ACTIVE_STEP ? ['pulse'] : [];
+    return live() ? Skills.equipped() : [];
+  }
   function resetActives() {
     actSlowT = 0; beamT = 0;
     const eq = actSlots();
@@ -563,6 +569,7 @@ const Game = (() => {
     const id = actSlots()[i];
     if (!id || actCd[i] > 0 || state !== 'play' || clearT >= 0 || deathT >= 0) return;
     actCd[i] = actCdMax(id);
+    if (tut) tut.usedActive = true;
     const a = ACTIVES[id];
     banner = { text: a.name.toUpperCase(), sub: '', t: 0.9, color: '#7cf7ff' };
     Sfx.power();
@@ -1020,6 +1027,7 @@ const Game = (() => {
     }
     paddle.x = clamp(paddle.x, FL + paddle.w / 2, FR - paddle.w / 2);
     paddle.vx = (paddle.x - prev) / dt;
+    if (tut) tut.moved += Math.abs(paddle.x - prev);
     paddle.squash = Math.max(0, paddle.squash - dt * 5);
   }
 
@@ -1065,6 +1073,7 @@ const Game = (() => {
 
   // ---------- Bucle principal ----------
   function isCleared() {
+    if (tut) return tut.step >= TUT_STEPS.length - 1 && !bricks.some(b => b.alive && !b.metal);
     if (lvl.warped) return true;
     if (lvl.boss) return boss && boss.dead;
     return !bricks.some(b => b.alive && !b.metal);
@@ -1080,7 +1089,7 @@ const Game = (() => {
     Sfx.lose();
     shake = 12; flash = 0.5; flashColor = '#ff2d55';
     deathT = 1.3;
-    if (run.demo) run.lives = 99;
+    if (run.demo || tut) run.lives = 99;
   }
 
   function update(dt) {
@@ -1109,6 +1118,7 @@ const Game = (() => {
     updateFx(d);
     updateActives(d);
     if (balls.length > lvl.maxBalls) lvl.maxBalls = balls.length;
+    if (tut) updateTutorial(d);
     if (lvl.obj && (lvl.objT -= d) <= 0) { lvl.objT = 0.2; checkObjectives(); }
 
     if (clearT < 0 && isCleared()) {
@@ -1145,6 +1155,7 @@ const Game = (() => {
 
   // ---------- Flujo de partida ----------
   function startRun(mode, level) {
+    tut = null;
     Sfx.init();
     Sfx.quiet = false;
     Sfx.duck(false);
@@ -1162,6 +1173,7 @@ const Game = (() => {
   }
 
   function startRogueLevel(R, def, mods, label) {
+    tut = null;
     Sfx.init();
     Sfx.quiet = false;
     Sfx.duck(false);
@@ -1176,6 +1188,7 @@ const Game = (() => {
   }
 
   function startDemo() {
+    tut = null;
     const pool = LEVELS.map((l, i) => i).filter(i => !LEVELS[i].boss);
     run = {
       mode: 'demo', demo: true, level: pool[Math.floor(Math.random() * pool.length)] + 1,
@@ -1190,6 +1203,7 @@ const Game = (() => {
   function finishLevel() {
     if (run.demo) { startDemo(); return; }
     state = 'clear';
+    if (tut) { finishTutorial(); return; }
     const xp = Math.floor((run.score - lvl.startScore) / 10) + 50 + (lvl.boss ? 150 : 0);
     announceLevels(Progress.add(xp));
     if (run.mode === 'rogue') {
@@ -1232,6 +1246,109 @@ const Game = (() => {
       bricks: lvl.bricks, coins: Math.floor(lvl.coins), reward, timeBonus, score: run.score,
       isLast: run.mode === 'campaign' && run.level >= CAMPAIGN_LEN, mode: run.mode, skillPts, xp, unlock, objectives,
     });
+  }
+
+  // ---------- Tutorial ----------
+  let tut = null;
+  const touchUI = () => window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  const TUT_STEPS = [
+    { title: 'Mueve la paleta', text: () => (touchUI() ? 'Arrastra el dedo por la pantalla' : 'Usa el mouse o las flechas ← →'), done: t => t.moved > 350 },
+    { title: 'Lanza la bola', text: () => (touchUI() ? 'Toca la pantalla' : 'Haz clic o presiona Espacio'), done: t => t.launched },
+    { title: 'Rompe 5 ladrillos', text: () => `Encadenar golpes sube el COMBO y los puntos · ${Math.min(lvl.bricks, 5)}/5`, done: () => lvl.bricks >= 5 },
+    { title: 'Haz un slice', text: () => 'Golpea la bola mientras mueves la paleta rápido: saldrá con efecto y curvará', done: t => t.sliced },
+    { title: 'Atrapa la cápsula', text: () => 'Las cápsulas dan poderes. Las grises son malas… pero dan puntos', done: () => lvl.powerups >= 1, enter: () => spawnCapsule(W / 2, TOP + 160, 'expand') },
+    { title: 'Recoge monedas', text: () => `Las monedas se gastan en la tienda · ${Math.min(lvl.coinPickups, 4)}/4`, done: () => lvl.coinPickups >= 4, enter: () => { for (let i = 0; i < 10; i++) spawnCoin(rnd(80, W - 80), TOP + rnd(0, 60), true); } },
+    { title: 'Usa una habilidad', text: () => (touchUI() ? 'Toca el botón 💢 de la izquierda: ¡Pulso!' : 'Presiona Q para lanzar un Pulso'), done: t => t.usedActive },
+    { title: 'Rompe todos los ladrillos', text: () => '¡Último paso! Despeja el nivel', done: () => false },
+  ];
+  const TUT_ACTIVE_STEP = 6;
+
+  function resetTutorial() {
+    tut = { step: 0, moved: 0, launched: false, sliced: false, usedActive: false, flash: 0, rebuilt: 0 };
+  }
+
+  function updateTutorial(dt) {
+    tut.flash = Math.max(0, tut.flash - dt * 2);
+    const st = TUT_STEPS[tut.step];
+    if (st && st.done(tut)) {
+      tut.step++;
+      tut.flash = 1;
+      Sfx.combo(3 + tut.step);
+      floater(W / 2, H * 0.6 - 40, '✓ ¡Bien!', '#3ddc84', 20);
+      tut.sliced = false;
+      tut.usedActive = false;
+      const next = TUT_STEPS[tut.step];
+      if (next && next.enter) next.enter();
+      if (tut.step === TUT_ACTIVE_STEP) actCd[0] = 0;
+    }
+    // si se despeja antes de terminar los pasos, se vuelven a armar los ladrillos
+    if (tut.step < TUT_STEPS.length - 1 && !bricks.some(b => b.alive && !b.metal)) {
+      buildBricks(run.def);
+      tut.rebuilt++;
+    }
+    // con la cápsula del paso 5 perdida, se repone
+    if (TUT_STEPS[tut.step] && TUT_STEPS[tut.step].enter && tut.step === 4 && !capsules.length && lvl.powerups < 1) spawnCapsule(W / 2, TOP + 160, 'expand');
+    if (tut.step === 5 && coins.length < 4 && lvl.coinPickups < 4) for (let i = 0; i < 6; i++) spawnCoin(rnd(80, W - 80), TOP + rnd(0, 60), true);
+  }
+
+  function drawTutorial() {
+    const st = TUT_STEPS[tut.step];
+    if (!st) return;
+    const light = Theme.cur.light;
+    const x = 40, y = H * 0.56, w = W - 80, h = 78;
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = light ? '#fffaf2' : 'rgba(14,11,38,0.92)';
+    rr(x, y, w, h, 14);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = tut.flash > 0 ? '#3ddc84' : Theme.cur.wall;
+    ctx.lineWidth = 2 + tut.flash * 2;
+    rr(x, y, w, h, 14);
+    ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = Theme.cur.hud.muted;
+    ctx.font = F(700, 10);
+    ctx.fillText(`PASO ${tut.step + 1} DE ${TUT_STEPS.length}`, x + 16, y + 18);
+    ctx.fillStyle = light ? '#3b352d' : '#ffffff';
+    ctx.font = F(800, 18);
+    ctx.fillText(st.title, x + 16, y + 40);
+    ctx.fillStyle = light ? '#6b6357' : '#c9cdf0';
+    ctx.font = F(600, 11);
+    ctx.fillText(st.text(), x + 16, y + 62, w - 32);
+    // barra de progreso de pasos
+    for (let i = 0; i < TUT_STEPS.length; i++) {
+      ctx.fillStyle = i < tut.step ? '#3ddc84' : i === tut.step ? Theme.cur.wall : 'rgba(128,128,160,0.35)';
+      ctx.fillRect(x + w - 16 - (TUT_STEPS.length - i) * 16, y + 14, 12, 5);
+    }
+    ctx.restore();
+  }
+
+  function startTutorial() {
+    Sfx.init();
+    Sfx.quiet = false;
+    Sfx.duck(false);
+    run = { mode: 'tutorial', level: 1, score: 0, lives: 99, continues: 0, nextLife: Infinity, bonusPaid: 0, demo: false, def: null, rng: Math.random };
+    displayScore = 0;
+    startLevel();
+    banner = { text: 'TUTORIAL', sub: 'Aprende lo básico y desbloquea la campaña', t: 2.4, color: '#3ddc84' };
+    UI.hideAll();
+  }
+
+  function finishTutorial() {
+    const first = !Save.d.tutorial;
+    Save.d.tutorial = true;
+    let ph = 0;
+    if (first) {
+      ph = TUTORIAL.reward.ph;
+      Save.d.skills.points += ph;
+      Save.d.skills.earned += ph;
+    }
+    Save.save();
+    Sfx.clear();
+    tut = null;
+    UI.showTutorialDone({ first, ph });
   }
 
   // ---------- Objetivos de estrellas ----------
@@ -1378,7 +1495,7 @@ const Game = (() => {
   function toMenu() {
     if (run && !run.demo && (state === 'play' || state === 'paused')) {
       if (run.mode === 'rogue') Rogue.onAbandon();
-      else { payScoreBonus(); recordScore(); Save.save(); }
+      else if (run.mode !== 'tutorial') { payScoreBonus(); recordScore(); Save.save(); }
     }
     startDemo();
     UI.show('menu');
@@ -2070,7 +2187,7 @@ const Game = (() => {
     ctx.textAlign = 'left';
     ctx.fillText('PUNTOS', 14, 20);
     ctx.textAlign = 'center';
-    ctx.fillText(run.mode === 'daily' ? 'DIARIO' : run.mode === 'endless' ? 'INFINITO' : run.mode === 'rogue' ? `ROGUE · ACTO ${run.act}` : 'NIVEL', W / 2, 20);
+    ctx.fillText(run.mode === 'daily' ? 'DIARIO' : run.mode === 'endless' ? 'INFINITO' : run.mode === 'rogue' ? `ROGUE · ACTO ${run.act}` : run.mode === 'tutorial' ? 'TUTORIAL' : run.mode === 'campaign' ? `CAMPAÑA ${campaignOf(run.level) + 1}` : 'NIVEL', W / 2, 20);
     ctx.textAlign = 'right';
     ctx.fillText('MONEDAS', W - 50, 20);
 
@@ -2080,21 +2197,21 @@ const Game = (() => {
     ctx.fillText(fmt(displayScore), 14, 45);
     ctx.textAlign = 'center';
     ctx.font = F(800, 16);
-    ctx.fillText(run.mode === 'campaign' ? `${run.level}/${CAMPAIGN_LEN}` : `${run.level}`, W / 2, 40);
+    ctx.fillText(run.mode === 'campaign' ? `${run.level - CAMPAIGNS[campaignOf(run.level)].from + 1}/10` : tut ? `${Math.min(tut.step + 1, TUT_STEPS.length)}/${TUT_STEPS.length}` : `${run.level}`, W / 2, 40);
     ctx.textAlign = 'right';
     ctx.fillStyle = hud.coin;
     ctx.font = F(800, 18);
     ctx.fillText(fmt(Save.d.coins), W - 50, 45);
 
     // vidas
-    const lives = Math.min(run.lives, 8);
+    const lives = tut ? 0 : Math.min(run.lives, 8);
     const lx = W / 2 - (lives * 18) / 2;
     for (let i = 0; i < lives; i++) {
       ctx.fillStyle = skinColor('paddle');
       rr(lx + i * 18 + 2, 47, 14, 5, 2.5);
       ctx.fill();
     }
-    if (run.lives > 8) { ctx.fillStyle = hud.text; ctx.font = F(700, 9); ctx.textAlign = 'left'; ctx.fillText(`+${run.lives - 8}`, lx + 8 * 18 + 3, 53); }
+    if (run.lives > 8 && !tut) { ctx.fillStyle = hud.text; ctx.font = F(700, 9); ctx.textAlign = 'left'; ctx.fillText(`+${run.lives - 8}`, lx + 8 * 18 + 3, 53); }
 
     // medidor de fiebre
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
@@ -2256,7 +2373,7 @@ const Game = (() => {
     drawDarkness();
     if (!run.demo) drawActives();
     finishPixel(pix);
-    if (!run.demo) { drawHUD(dt); drawBanner(); }
+    if (!run.demo) { drawHUD(dt); if (tut) drawTutorial(); drawBanner(); }
     if (flash > 0) {
       ctx.globalAlpha = flash * 0.5;
       ctx.fillStyle = flashColor;
@@ -2295,11 +2412,12 @@ const Game = (() => {
   }
 
   return {
-    boot, startRun, startRogueLevel, nextLevel, retry, continueRun, pause, resume, restartLevel, toMenu, ach,
+    boot, startRun, startRogueLevel, startTutorial, nextLevel, retry, continueRun, pause, resume, restartLevel, toMenu, ach,
     todayStr, dateStr, totalStars, continueCost,
     isPlaying: () => state === 'play' && run && !run.demo,
     get run() { return run; },
     get lvl() { return lvl; },
+    get tut() { return tut; },
     CAMPAIGN_LEN,
     // depuración: avanza la simulación n pasos fijos sin renderizar
     _sim(n) { for (let i = 0; i < n; i++) update(STEP); return { state, level: run.level, t: lvl.time, balls: balls.length, bricks: bricks.filter(b => b.alive && !b.metal).length, boss: boss && boss.hp, bx: balls[0] && balls[0].x, spin: Math.max(0, ...balls.map(b => Math.abs(b.spin))) }; },

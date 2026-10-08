@@ -166,8 +166,18 @@ const CLASSES = {
 // ---------- Desbloqueos de campaña ----------
 const Unlocks = {
   cleared: n => (Save.d.stars[n] || 0) > 0,
+  lockText(key) {
+    const lv = this.levelOf(key);
+    if (key === 'campaign') return 'Completa el tutorial';
+    const ci = CAMPAIGNS.findIndex(c => c.to === lv);
+    return ci >= 0 ? `Termina la campaña ${ci + 1}` : `Supera el nivel ${lv}`;
+  },
   levelOf(key) { for (const [lv, r] of Object.entries(CAMPAIGN_REWARDS)) if (r.key === key) return +lv; return 0; },
-  has(key) { const lv = this.levelOf(key); return !lv || this.cleared(lv); },
+  has(key) {
+    if (key === 'campaign') return !!Save.d.tutorial;
+    const lv = this.levelOf(key);
+    return !lv || this.cleared(lv);
+  },
   fx() {
     const out = {};
     for (const [lv, r] of Object.entries(CAMPAIGN_REWARDS)) if (r.fx && this.cleared(+lv)) for (const q in r.fx) out[q] = (out[q] || 0) + r.fx[q];
@@ -177,11 +187,11 @@ const Unlocks = {
   grant(n) {
     const r = CAMPAIGN_REWARDS[n];
     if (!r) return null;
-    if (r.bonus) {
-      Save.d.coins += 500;
-      Save.d.skills.points += 5;
-      Save.d.skills.earned += 5;
-      if (!Save.d.owned.paddle.includes('gold')) Save.d.owned.paddle.push('gold');
+    const b = r.bonus;
+    if (b) {
+      if (b.coins) Save.d.coins += b.coins;
+      if (b.ph) { Save.d.skills.points += b.ph; Save.d.skills.earned += b.ph; }
+      if (b.paddle && !Save.d.owned.paddle.includes(b.paddle)) Save.d.owned.paddle.push(b.paddle);
     }
     Skills.invalidate();
     return r;
