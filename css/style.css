@@ -737,3 +737,9 @@ body[data-theme="tron"] .btn.primary { background: rgba(0, 229, 255, 0.12); bord
 .theme-card small { color: var(--muted); font-size: 0.82em; line-height: 1.15; }
 .theme-card .btn { font-size: 0.75em; padding: 0.45em; }
 .themes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5em; }
+.btn.tut { background: linear-gradient(180deg, #3ddc84, #1f9e5c); border-color: #9ff0c2; box-shadow: 0 0 22px rgba(61, 220, 132, 0.55); animation: pulse 1.6s ease-in-out infinite; }
+.btn.tut small { color: #e2ffe9; }
+.obj b { color: var(--text); }
+.chapter { grid-column: 1 / -1; display: flex; flex-direction: column; margin-top: 0.3em; }
+.chapter b { font-family: var(--font-title); font-size: 0.9em; letter-spacing: 0.08em; }
+.chapter small { color: var(--muted); font-size: 0.8em; }

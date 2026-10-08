@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800;900&family=Rajdhani:wght@500;600;700&family=Press+Start+2P&family=VT323&family=Monoton&family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=23">
+  <link rel="stylesheet" href="css/style.css?v=28">
 </head>
 <body>
   <div id="wrap">
@@ -30,8 +30,9 @@
           <span class="pill">🔥 <b id="m-streak">1 día</b></span>
         </div>
         <div class="menu-btns">
-          <button class="btn primary" data-act="campaign">▶ Campaña <small id="m-camp"></small></button>
-          <button class="btn" data-act="levels">Elegir nivel <small id="m-stars"></small></button>
+          <button class="btn primary tut" id="tutBtn" data-act="tutorial">🎓 Tutorial <small>Desbloquea la campaña</small></button>
+          <button class="btn primary" id="campBtn" data-act="campaign">▶ Campaña <small id="m-camp"></small></button>
+          <button class="btn" id="levelsBtn" data-act="levels">Elegir nivel <small id="m-stars"></small></button>
           <button class="btn" id="endlessBtn" data-act="endless">∞ Infinito <small id="m-endless"></small></button>
           <button class="btn" id="dailyBtn" data-act="daily">📅 Desafío diario <small id="m-daily"></small></button>
           <button class="btn rogue" id="rogueBtn" data-act="rogue">☠ Modo Rogue <small id="m-rogue"></small></button>
@@ -42,6 +43,7 @@
           </div>
           <div class="row">
             <button class="btn sm" data-act="howto">❔ Cómo jugar</button>
+            <button class="btn sm" data-act="tutorial">🎓 Tutorial</button>
             <button class="btn sm" data-act="settings">⚙ Ajustes</button>
           </div>
         </div>
@@ -96,7 +98,7 @@
             <b>FIEBRE:</b> llena la barra superior para puntos x2 y bola de fuego.<br>
             <b>Monedas:</b> recógelas con la paleta y gástalas en la tienda.<br>
             <b>Puntos de habilidad (PH):</b> gánalos en la campaña (estrellas nuevas, jefes y puntaje) y gástalos en el árbol de habilidades.<br>
-            <b>Modo Rogue:</b> se desbloquea al vencer al primer jefe (nivel 5).</p>
+            <b>Progresión:</b> el tutorial abre la campaña. Al terminar la campaña 1 se abre el árbol de habilidades, con la 2 el modo Infinito, con la 3 el Desafío diario y con la 4 el modo Rogue.</p>
           <h3 class="sub">Ladrillos especiales</h3>
           <div class="bricks-legend">
             <span><i style="background:#a7b0c0"></i>Duro (2-3 golpes)</span>
@@ -159,6 +161,17 @@
         <div class="menu-btns">
           <button class="btn primary" id="b-play" data-act="play-level">▶ Jugar</button>
           <button class="btn sm" data-act="levels">← Niveles</button>
+        </div>
+      </section>
+
+      <section id="scr-tutdone" class="screen dim">
+        <div class="ev-icon">🎓</div>
+        <h2 class="glow-green">¡Tutorial completado!</h2>
+        <p class="muted" id="td-sub">Ya sabes lo básico. Esto es lo que desbloqueaste:</p>
+        <div class="obj-list" id="td-list"></div>
+        <div class="menu-btns">
+          <button class="btn primary" data-act="campaign">▶ Empezar la campaña</button>
+          <button class="btn sm" data-act="home">Menú</button>
         </div>
       </section>
 
@@ -227,13 +240,13 @@
     <div id="toasts"></div>
   </div>
 
-  <script src="js/storage.js?v=23"></script>
-  <script src="js/audio.js?v=23"></script>
-  <script src="js/data.js?v=23"></script>
-  <script src="js/skills.js?v=23"></script>
-  <script src="js/themes.js?v=23"></script>
-  <script src="js/game.js?v=23"></script>
-  <script src="js/rogue.js?v=23"></script>
-  <script src="js/ui.js?v=23"></script>
+  <script src="js/storage.js?v=28"></script>
+  <script src="js/audio.js?v=28"></script>
+  <script src="js/data.js?v=28"></script>
+  <script src="js/skills.js?v=28"></script>
+  <script src="js/themes.js?v=28"></script>
+  <script src="js/game.js?v=28"></script>
+  <script src="js/rogue.js?v=28"></script>
+  <script src="js/ui.js?v=28"></script>
 </body>
 </html>
