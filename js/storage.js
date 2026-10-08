@@ -26,9 +26,11 @@ const Save = (() => {
     rogueRun: null,
     skills: { points: 0, earned: 0, xp: 0, ranks: {}, starsCredited: 0, bosses: {}, cls: null, cls2: null, equip: [null, null, null] },
     profile: { level: 1, xp: 0 },
+    objectives: {},
+    themes: { current: 'neon', owned: ['neon'], seen: ['neon'] },
   });
 
-  const NESTED = ['owned', 'skin', 'stats', 'daily', 'streak', 'settings', 'rogue', 'skills', 'profile'];
+  const NESTED = ['owned', 'skin', 'stats', 'daily', 'streak', 'settings', 'rogue', 'skills', 'profile', 'themes'];
   let data;
 
   function load() {

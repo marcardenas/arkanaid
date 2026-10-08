@@ -26,7 +26,10 @@ y entra a http://localhost:8000. Funciona en escritorio y en el celular.
 
 ## Modos
 
-- **Campaña:** 15 niveles hechos a mano con 3 jefes y hasta 3 estrellas por nivel (sin morir + bajo el tiempo par).
+- **Campaña:** 15 niveles hechos a mano con 3 jefes y **3 estrellas por nivel**. La ★1 es por superarlo y la ★2 y ★3 son por cumplir sus dos objetivos propios.
+  - **Ejemplos de objetivos:** tiempo límite, sin perder vidas, combo N, N bolas a la vez, ladrillos destruidos con explosiones o con bola curva, activar la FIEBRE, drones, monedas, puntaje, o no recibir disparos del jefe.
+  - **Progreso:** los objetivos cumplidos se guardan entre intentos, así que puedes volver por la estrella que te falta.
+  - **Dónde se ven:** en el HUD mientras juegas, en la pausa, en el resultado y en la ficha del nivel antes de jugar.
 - **Infinito:** niveles procedurales simétricos que se ponen más difíciles, con un jefe cada 5 niveles.
 - **Desafío diario:** la misma semilla para todos ese día, con 2 vidas y sin continuar.
 - **☠ Modo Rogue** (se desbloquea al vencer al primer jefe, en el nivel 5): Arkanoid + roguelike.
@@ -37,6 +40,18 @@ y entra a http://localhost:8000. Funciona en escritorio y en el celular.
   - **7 eventos:** con decisiones de riesgo y recompensa (Altar de sangre, Pacto oscuro, El apostador…).
   - **Fragmentos ◆:** se gastan en la tienda de la run. Al terminar, se convierten en monedas.
   - La run se guarda y puedes retomarla.
+
+## Temas visuales
+
+Hay 5 temas desbloqueables que cambian todo el juego: fondo animado, ladrillos, colores, tipografía y menús. Se eligen en la tienda › Temas.
+
+| Tema | Estilo | Cómo se desbloquea |
+|---|---|---|
+| ⚡ Neón | Neón violeta y cristal (el original) | Disponible desde el inicio |
+| 🌅 Synthwave 80s | Sol a rayas y cuadrícula en perspectiva | Superar el nivel 6 |
+| 👾 Pixel CRT | Render en baja resolución, líneas de escaneo y fuente de 8 bits | 500 monedas |
+| 🌸 Pastel minimal | Tema claro y redondeado | Nivel de cuenta 8 |
+| 💠 Tron holográfico | Ladrillos de contorno de luz y red hexagonal | Completar la campaña |
 
 ## Progresión
 
@@ -87,6 +102,7 @@ El progreso se guarda en `localStorage`.
 index.html      pantallas (DOM) + canvas
 css/style.css   estilos de la interfaz
 js/storage.js   guardado
+js/themes.js    temas visuales
 js/audio.js     efectos y música sintetizados con WebAudio
 js/data.js      niveles, ladrillos, power-ups, mejoras, estilos, logros, generador procedural
 js/skills.js    árbol de habilidades

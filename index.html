@@ -7,8 +7,8 @@
   <title>Arkanaid</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=16">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800;900&family=Rajdhani:wght@500;600;700&family=Press+Start+2P&family=VT323&family=Monoton&family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css?v=23">
 </head>
 <body>
   <div id="wrap">
@@ -58,6 +58,7 @@
         <div class="tabs">
           <button class="tab" data-act="tab" data-tab="upgrades">Mejoras</button>
           <button class="tab" id="skinsTab" data-act="tab" data-tab="skins">Estilos</button>
+          <button class="tab" data-act="tab" data-tab="themes">Temas</button>
         </div>
         <div id="shop-list" class="list"></div>
         <button class="btn sm" data-act="back">← Volver</button>
@@ -116,6 +117,7 @@
 
       <section id="scr-pause" class="screen dim">
         <h2>Pausa</h2>
+        <div id="p-objs" class="obj-list"></div>
         <div class="menu-btns">
           <button class="btn primary" data-act="resume">▶ Continuar</button>
           <button class="btn" id="p-restart" data-act="restart">↻ Reiniciar nivel</button>
@@ -148,6 +150,18 @@
         </div>
       </section>
 
+      <section id="scr-brief" class="screen">
+        <p class="muted" id="b-num"></p>
+        <h2 id="b-name"></h2>
+        <div id="b-stars" class="big-stars"></div>
+        <div id="b-objs" class="obj-list"></div>
+        <div id="b-reward"></div>
+        <div class="menu-btns">
+          <button class="btn primary" id="b-play" data-act="play-level">▶ Jugar</button>
+          <button class="btn sm" data-act="levels">← Niveles</button>
+        </div>
+      </section>
+
       <section id="scr-profile" class="screen">
         <h2>Progreso</h2>
         <div class="level-big"><small>NIVEL</small><b id="pr-level">1</b></div>
@@ -163,6 +177,7 @@
         <h2 id="c-title" class="glow-green">¡NIVEL SUPERADO!</h2>
         <p id="c-name" class="muted"></p>
         <div id="c-stars" class="big-stars"></div>
+        <div id="c-objs" class="obj-list"></div>
         <div id="c-unlock" class="unlock-card"></div>
         <div id="c-stats" class="stats"></div>
         <p id="c-nextr" class="tip"></p>
@@ -212,12 +227,13 @@
     <div id="toasts"></div>
   </div>
 
-  <script src="js/storage.js?v=16"></script>
-  <script src="js/audio.js?v=16"></script>
-  <script src="js/data.js?v=16"></script>
-  <script src="js/skills.js?v=16"></script>
-  <script src="js/game.js?v=16"></script>
-  <script src="js/rogue.js?v=16"></script>
-  <script src="js/ui.js?v=16"></script>
+  <script src="js/storage.js?v=23"></script>
+  <script src="js/audio.js?v=23"></script>
+  <script src="js/data.js?v=23"></script>
+  <script src="js/skills.js?v=23"></script>
+  <script src="js/themes.js?v=23"></script>
+  <script src="js/game.js?v=23"></script>
+  <script src="js/rogue.js?v=23"></script>
+  <script src="js/ui.js?v=23"></script>
 </body>
 </html>

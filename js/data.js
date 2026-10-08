@@ -44,7 +44,7 @@ const POWERUPS = {
 
 const E = '.............';
 const LEVELS = [
-  { name: 'Primera luz', rows: [
+  { name: 'Primera luz', obj: [{ type: 'time', n: 75 }, { type: 'combo', n: 8 }], rows: [
     E,
     '..rrrrrrrrr..',
     '.ooooooooooo.',
@@ -53,7 +53,7 @@ const LEVELS = [
     '.ccccccccccc.',
     '..bbbbbbbbb..',
   ] },
-  { name: 'Pirámide', rows: [
+  { name: 'Pirámide', obj: [{ type: 'noDeath' }, { type: 'powerups', n: 2 }], rows: [
     '......y......',
     '.....yoy.....',
     '....yo?oy....',
@@ -62,7 +62,7 @@ const LEVELS = [
     '.yorrrrrrroy.',
     'yorrrrXrrrroy',
   ] },
-  { name: 'Jaque', rows: [
+  { name: 'Jaque', obj: [{ type: 'combo', n: 10 }, { type: 'time', n: 100 }], rows: [
     'T.T.T.T.T.T.T',
     '.b.b.b?b.b.b.',
     'T.T.T.T.T.T.T',
@@ -70,7 +70,7 @@ const LEVELS = [
     'T.T.T.T.T.T.T',
     '.g.g.g.g.g.g.',
   ] },
-  { name: 'Barril de pólvora', rows: [
+  { name: 'Barril de pólvora', obj: [{ type: 'explosions', n: 15 }, { type: 'noDeath' }], rows: [
     'ppppppppppppp',
     'pbbbbbbbbbbbp',
     'pbXXX.?.XXXbp',
@@ -79,12 +79,12 @@ const LEVELS = [
     'pbbbbbbbbbbbp',
     'ppppppppppppp',
   ] },
-  { name: 'JEFE: El Guardián', boss: 1, rows: [
+  { name: 'JEFE: El Guardián', boss: 1, obj: [{ type: 'bossTime', n: 90 }, { type: 'noDeath' }], rows: [
     E, E, E, E, E, E,
     '.R.R.R.R.R.R.',
     '..?.......?..',
   ] },
-  { name: 'Fortaleza', rows: [
+  { name: 'Fortaleza', obj: [{ type: 'multiball', n: 3 }, { type: 'time', n: 160 }], rows: [
     'MMMMM...MMMMM',
     'MyyyM...MyyyM',
     'MyGyMTTTMyGyM',
@@ -93,7 +93,7 @@ const LEVELS = [
     '...ooooooo...',
     '.rrrrrrrrrrr.',
   ] },
-  { name: 'Invasores', rows: [
+  { name: 'Invasores', obj: [{ type: 'drones', n: 2 }, { type: 'combo', n: 12 }], rows: [
     '..g.......g..',
     '...g.....g...',
     '..ggggggggg..',
@@ -103,7 +103,7 @@ const LEVELS = [
     'g.g.......g.g',
     '...gg...gg...',
   ] },
-  { name: 'Cinta transportadora', rows: [
+  { name: 'Cinta transportadora', obj: [{ type: 'slice', n: 6 }, { type: 'noDeath' }], rows: [
     'cccccc.cccccc',
     E,
     '...HHHHHHH...',
@@ -114,7 +114,7 @@ const LEVELS = [
     E,
     '....HHHHH....',
   ] },
-  { name: 'Fantasma', rows: [
+  { name: 'Fantasma', obj: [{ type: 'fever', n: 1 }, { type: 'powerups', n: 3 }], rows: [
     'IIIIIIIIIIIII',
     'I...........I',
     'I.bbbbbbbbb.I',
@@ -124,12 +124,12 @@ const LEVELS = [
     'I...........I',
     'IIIIIIIIIIIII',
   ] },
-  { name: 'JEFE: El Coloso', boss: 2, rows: [
+  { name: 'JEFE: El Coloso', boss: 2, obj: [{ type: 'noHit' }, { type: 'bossTime', n: 120 }], rows: [
     E, E, E, E, E, E,
     'RRR.RRRRR.RRR',
     '.X.........X.',
   ] },
-  { name: 'Rebrote', rows: [
+  { name: 'Rebrote', obj: [{ type: 'explosions', n: 25 }, { type: 'time', n: 130 }], rows: [
     '......R......',
     '.....RyR.....',
     '....RyXyR....',
@@ -140,7 +140,7 @@ const LEVELS = [
     '.....RyR.....',
     '......R......',
   ] },
-  { name: 'Lluvia de acero', rows: [
+  { name: 'Lluvia de acero', obj: [{ type: 'multiball', n: 5 }, { type: 'coins', n: 12 }], rows: [
     'M.M.M.M.M.M.M',
     'rrrrrrrrrrrrr',
     '.M.M.M.M.M.M.',
@@ -149,7 +149,7 @@ const LEVELS = [
     'UUUUUUUUUUUUU',
     '..T.T.T.T.T..',
   ] },
-  { name: 'Corazón', rows: [
+  { name: 'Corazón', obj: [{ type: 'combo', n: 20 }, { type: 'noDeath' }], rows: [
     '..rrr...rrr..',
     '.rpppr.rpppr.',
     'rppGpprppGppr',
@@ -161,7 +161,7 @@ const LEVELS = [
     '.....rpr.....',
     '......X......',
   ] },
-  { name: 'Motor del caos', rows: [
+  { name: 'Motor del caos', obj: [{ type: 'score', n: 15000 }, { type: 'fever', n: 2 }], rows: [
     'G.X.?.C.?.X.G',
     'TTTTTTTTTTTTT',
     '..HHHHHHHHH..',
@@ -170,7 +170,7 @@ const LEVELS = [
     'UUUMUUUUUMUUU',
     '.R.R.R.R.R.R.',
   ] },
-  { name: 'JEFE: Señor Supremo', boss: 3, rows: [
+  { name: 'JEFE: Señor Supremo', boss: 3, obj: [{ type: 'bossTime', n: 160 }, { type: 'noHit' }], rows: [
     E, E, E, E, E, E,
     '..MRRRRRRRM..',
     'C.X.?...?.X.C',
@@ -194,6 +194,24 @@ const CAMPAIGN_REWARDS = {
   13: { icon: '🏅', name: 'Renombre',              desc: '+10% de puntos', fx: { score: 0.1 } },
   14: { icon: '⚪', name: 'Compañera',             desc: '25% de empezar cada nivel con una bola extra', fx: { twin: 0.25 } },
   15: { icon: '👑', name: 'Leyenda de la campaña', desc: '+500 monedas, +5 PH y la paleta Oro', bonus: true },
+};
+
+// Objetivos de estrellas: ★1 por superar el nivel, ★2 y ★3 por cumplir sus dos objetivos.
+// 'live' se cumple durante la partida; 'end' se evalúa al superar el nivel.
+const OBJECTIVES = {
+  time:       { icon: '⏱', text: n => `Supéralo en menos de ${n} s`, end: (s, n) => s.time <= n },
+  bossTime:   { icon: '⏱', text: n => `Derrota al jefe en menos de ${n} s`, end: (s, n) => s.time <= n },
+  noDeath:    { icon: '❤', text: () => 'Sin perder vidas', end: s => s.deaths === 0 },
+  noHit:      { icon: '🛡', text: () => 'Sin recibir disparos del jefe', end: s => s.hits === 0 },
+  combo:      { icon: '🔗', text: n => `Logra un combo de ${n}`, live: (s, n) => s.maxChain >= n },
+  multiball:  { icon: '⚪', text: n => `Ten ${n} bolas a la vez`, live: (s, n) => s.maxBalls >= n },
+  powerups:   { icon: '💊', text: n => `Recoge ${n} cápsulas`, live: (s, n) => s.powerups >= n },
+  explosions: { icon: '💥', text: n => `Rompe ${n} ladrillos con explosiones`, live: (s, n) => s.explBricks >= n },
+  fever:      { icon: '🔥', text: n => (n > 1 ? `Activa la FIEBRE ${n} veces` : 'Activa la FIEBRE'), live: (s, n) => s.fevers >= n },
+  slice:      { icon: '🌀', text: n => `Rompe ${n} ladrillos con bola curva`, live: (s, n) => s.sliceBricks >= n },
+  drones:     { icon: '🛸', text: n => `Destruye ${n} drones`, live: (s, n) => s.drones >= n },
+  coins:      { icon: '🪙', text: n => `Recoge ${n} monedas`, live: (s, n) => s.coinPickups >= n },
+  score:      { icon: '🏅', text: n => `Haz ${n.toLocaleString('es-CL')} puntos en el nivel`, live: (s, n) => s.score >= n },
 };
 
 const BOSSES = [
