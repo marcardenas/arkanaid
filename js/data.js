@@ -177,6 +177,25 @@ const LEVELS = [
   ] },
 ];
 
+// Lo que desbloquea superar cada nivel de la campaña por primera vez.
+const CAMPAIGN_REWARDS = {
+  1:  { icon: '🌳', name: 'Árbol de habilidades',  desc: 'Elige una clase y gasta tus PH', key: 'tree' },
+  2:  { icon: '∞',  name: 'Modo Infinito',         desc: 'Niveles procedurales sin fin', key: 'endless' },
+  3:  { icon: '🎛', name: 'Segunda ranura',        desc: 'Equipa dos habilidades activas (Q y E)', key: 'slot2' },
+  4:  { icon: '📅', name: 'Desafío diario',        desc: 'Un nivel nuevo cada día', key: 'daily' },
+  5:  { icon: '☠',  name: 'Modo Rogue',            desc: 'Arkanoid + roguelike', key: 'rogue' },
+  6:  { icon: '🎨', name: 'Estilos',               desc: 'Bolas y paletas nuevas en la tienda', key: 'skins' },
+  7:  { icon: '❤',  name: 'Corazón de campaña',    desc: '+1 vida inicial en todos los modos', fx: { lives: 1 } },
+  8:  { icon: '🛒', name: 'Mejoras avanzadas',     desc: 'Red de seguridad, Ventaja inicial, Fiebre y Láser rápido en la tienda', key: 'advshop' },
+  9:  { icon: '📈', name: 'Techo de combo',        desc: '+1 al multiplicador máximo de combo', fx: { comboCap: 1 } },
+  10: { icon: '🧱', name: 'Muro veterano',         desc: '+1 barrera al empezar cada nivel', fx: { barrier: 1 } },
+  11: { icon: '🪙', name: 'Bolsillos hondos',      desc: '+10% de valor de monedas', fx: { coinVal: 0.1 } },
+  12: { icon: '🪂', name: 'Paracaídas',            desc: 'Las cápsulas caen 25% más lento', fx: { capSlow: 0.25 } },
+  13: { icon: '🏅', name: 'Renombre',              desc: '+10% de puntos', fx: { score: 0.1 } },
+  14: { icon: '⚪', name: 'Compañera',             desc: '25% de empezar cada nivel con una bola extra', fx: { twin: 0.25 } },
+  15: { icon: '👑', name: 'Leyenda de la campaña', desc: '+500 monedas, +5 PH y la paleta Oro', bonus: true },
+};
+
 const BOSSES = [
   { name: 'Guardián', color: '#ff4d6d', hp: 40 },
   { name: 'Coloso', color: '#2ec4f1', hp: 70 },
@@ -190,11 +209,11 @@ const UPGRADES = [
   { id: 'luck',     icon: '🍀', name: 'Suerte',             desc: '+2.5% probabilidad de cápsulas',                max: 5, cost: l => 90 + l * 80 },
   { id: 'keeper',   icon: '⛓', name: 'Guardacombo',        desc: 'Conserva 25% del combo al tocar la paleta',     max: 3, cost: l => 150 + l * 150 },
   { id: 'greed',    icon: '💰', name: 'Codicia',            desc: '+25% valor de cada moneda',                     max: 4, cost: l => 120 + l * 120 },
-  { id: 'shield',   icon: '🛡', name: 'Red de seguridad',   desc: 'Empieza cada nivel con una barrera',            max: 2, cost: l => 250 + l * 300 },
-  { id: 'starter',  icon: '🚀', name: 'Ventaja inicial',    desc: 'Empieza cada nivel con un power-up aleatorio',  max: 1, cost: () => 400 },
+  { id: 'shield', adv: true,   icon: '🛡', name: 'Red de seguridad',   desc: 'Empieza cada nivel con una barrera',            max: 2, cost: l => 250 + l * 300 },
+  { id: 'starter', adv: true,  icon: '🚀', name: 'Ventaja inicial',    desc: 'Empieza cada nivel con un power-up aleatorio',  max: 1, cost: () => 400 },
   { id: 'magnet',   icon: '🧲', name: 'Imán de monedas',    desc: 'Monedas y cápsulas van hacia tu paleta',        max: 3, cost: l => 100 + l * 100 },
-  { id: 'fever',    icon: '🔥', name: 'Fiebre',             desc: 'La FIEBRE se llena 20% más rápido y dura +1s',  max: 3, cost: l => 140 + l * 140 },
-  { id: 'gun',      icon: '⚡', name: 'Láser rápido',       desc: '+20% cadencia del láser',                        max: 3, cost: l => 100 + l * 100 },
+  { id: 'fever', adv: true,    icon: '🔥', name: 'Fiebre',             desc: 'La FIEBRE se llena 20% más rápido y dura +1s',  max: 3, cost: l => 140 + l * 140 },
+  { id: 'gun', adv: true,      icon: '⚡', name: 'Láser rápido',       desc: '+20% cadencia del láser',                        max: 3, cost: l => 100 + l * 100 },
 ];
 
 const SKINS = {
@@ -241,6 +260,9 @@ const ACHIEVEMENTS = [
   { id: 'masochist', name: 'Masoquista',          desc: 'Atrapa 3 cápsulas malas en un mismo nivel',     reward: 40 },
   { id: 'warp',      name: 'Atajo',               desc: 'Usa una cápsula WARP',                           reward: 30 },
   { id: 'slice',     name: 'Tiro con efecto',     desc: 'Rompe un ladrillo con una bola curva',          reward: 25 },
+  { id: 'rogue1',    name: 'Superviviente',       desc: 'Supera el acto 1 en modo Rogue',                 reward: 80 },
+  { id: 'roguewin',  name: 'Leyenda rogue',       desc: 'Gana una run completa de Rogue',                 reward: 400 },
+  { id: 'relic10',   name: 'Relicario',           desc: 'Ten 10 reliquias en una misma run de Rogue',     reward: 100 },
   { id: 'enemy25',   name: 'Exterminador',        desc: 'Destruye 25 drones',                             reward: 50 },
 ];
 

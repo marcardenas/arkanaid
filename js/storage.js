@@ -22,9 +22,13 @@ const Save = (() => {
     streak: { last: '', count: 0 },
     settings: { sound: true, music: true, shake: true },
     seenHowto: false,
+    rogue: { runs: 0, wins: 0, bestDepth: 0, bestScore: 0 },
+    rogueRun: null,
+    skills: { points: 0, earned: 0, xp: 0, ranks: {}, starsCredited: 0, bosses: {}, cls: null, cls2: null, equip: [null, null, null] },
+    profile: { level: 1, xp: 0 },
   });
 
-  const NESTED = ['owned', 'skin', 'stats', 'daily', 'streak', 'settings'];
+  const NESTED = ['owned', 'skin', 'stats', 'daily', 'streak', 'settings', 'rogue', 'skills', 'profile'];
   let data;
 
   function load() {
