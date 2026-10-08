@@ -38,8 +38,24 @@ const Game = (() => {
   resetEffects();
 
   const live = () => run && !run.demo;
+  // Rogue: reliquias de la run y modificadores del nivel
+  const rel = id => (run && run.relics && run.relics[id]) || 0;
+  const mod = m => !!(lvl && lvl.mods && lvl.mods.includes(m));
+  // bonos combinados: reliquias de la run + árbol de habilidades
+  let relicBonus = {};
+  function computeRelicBonus() {
+    relicBonus = {};
+    if (!run || !run.relics) return;
+    for (const [id, n] of Object.entries(run.relics)) {
+      const fx = ROGUE_RELICS[id] && ROGUE_RELICS[id].fx;
+      if (!n || !fx) continue;
+      for (const k in fx) relicBonus[k] = (relicBonus[k] || 0) + fx[k] * n;
+    }
+  }
+  const bon = k => (relicBonus[k] || 0) + (run && !run.demo ? Skills.val(k) : 0);
+  const isMega = () => effects.mega > 0 || bon('jugg') > 0;
   const ballIsFire = () => effects.fire > 0 || feverT > 0;
-  const comboMult = () => Math.min(8, 1 + Math.floor(chain / 4));
+  const comboMult = () => Math.min(8 + bon('comboCap'), 1 + Math.floor(chain / 4));
 
   function stat(k, n = 1) {
     if (!live()) return;
@@ -141,20 +157,39 @@ const Game = (() => {
     lvl = {
       time: 0, deaths: 0, bricks: 0, coins: 0, negatives: 0, maxChain: 0,
       name: def.name, boss: !!def.boss, startScore: run.score, warped: false,
-      destructible: bricks.filter(b => !b.metal).length,
+      destructible: bricks.filter(b => !b.metal).length, mods: run.mods || [],
     };
+    computeRelicBonus();
+    chain = Math.floor(bon('comboStart'));
+    resetActives();
+    if (bon('midas')) {
+      for (const b of bricks) {
+        if (BRICK_COLORS[b.ch] && Math.random() < bon('midas')) Object.assign(b, { ch: 'G', hp: 5, maxHp: 5, color: '#f5b921', pts: 500, coins: 6, gold: true });
+      }
+    }
+    if (mod('armored')) for (const b of bricks) if (!b.metal) { b.hp++; b.maxHp++; }
+    if (mod('regen')) for (const b of bricks) if (BRICK_COLORS[b.ch]) b.regen = true;
     balls = []; capsules = []; coins = []; lasers = []; enemies = []; bullets = []; explosions = [];
     resetEffects();
-    barrier = up('shield');
-    chain = 0; fever = 0; feverT = 0; clearT = -1; deathT = -1; enemyT = rnd(8, 14);
+    barrier = up('shield') + bon('barrier');
+    fever = 0; feverT = 0; clearT = -1; deathT = -1; enemyT = rnd(8, 14);
     chainCounts = {};
     paddle = { x: W / 2, w: targetPaddleW(), stun: 0, squash: 0, vx: 0 };
     serveBall();
+    const tw = bon('twin');
+    const extra = Math.floor(tw) + (Math.random() < tw % 1 ? 1 : 0);
+    for (let i = 0; i < extra; i++) serveBall();
+    if (bon('ignite')) effects.fire = bon('ignite');
+    if (bon('laserStart')) effects.laser = bon('laserStart');
     if (up('starter') && !run.demo) {
       const good = ['expand', 'laser', 'catch', 'slow', 'mega', 'double', 'magnet'];
       applyPowerup(good[Math.floor(Math.random() * good.length)], true);
     }
-    banner = { text: run.mode === 'campaign' ? `NIVEL ${run.level}/${CAMPAIGN_LEN}` : `NIVEL ${run.level}`, sub: def.name, t: 2.4, color: boss ? '#ff4d6d' : '#7c5cff' };
+    const modTxt = lvl.mods.map(m => ROGUE_MODS[m].icon + ' ' + ROGUE_MODS[m].name).join('  ');
+    banner = {
+      text: run.mode === 'rogue' ? run.label : run.mode === 'campaign' ? `NIVEL ${run.level}/${CAMPAIGN_LEN}` : `NIVEL ${run.level}`,
+      sub: modTxt ? `${def.name} · ${modTxt}` : def.name, t: 2.4, color: boss ? '#ff4d6d' : lvl.mods.length ? '#ff8c42' : '#7c5cff',
+    };
     state = 'play';
     Sfx.setIntensity(0);
     if (run.mode === 'endless' && run.level >= 10) ach('endless10');
@@ -175,6 +210,10 @@ const Game = (() => {
     let s = 400 + Math.min(180, (run.level - 1) * 10) + Math.min(160, lvl.time * 1.6);
     if (effects.slow > 0) s *= 0.62;
     if (effects.fast > 0) s *= 1.35;
+    if (actSlowT > 0) s *= 0.45;
+    s *= 1 - Math.min(0.35, bon('slow'));
+    s *= 1 + bon('fast');
+    if (mod('fast')) s *= 1.2;
     return s;
   }
 
@@ -202,7 +241,7 @@ const Game = (() => {
     if (balls.every(b => b.stuck)) launch();
     const src = balls.filter(b => !b.stuck).slice(0, 12);
     for (const b of src) {
-      for (const a of [-0.45, 0.45]) {
+      for (const a of bon('hydra') ? [-0.45, 0.45, -0.2, 0.2] : [-0.45, 0.45]) {
         if (balls.length >= 40) break;
         const c = Math.cos(a), s = Math.sin(a);
         const nb = newBall(b.x, b.y, b.vx * c - b.vy * s, b.vx * s + b.vy * c, false);
@@ -242,12 +281,18 @@ const Game = (() => {
     aimFromPaddle(b, (b.x - paddle.x) / (paddle.w / 2));
     paddle.squash = 1;
     // SLICE: si la paleta se desliza al golpear, la bola sale con efecto y curva su trayectoria
-    b.spin = Math.abs(paddle.vx) > 150 ? clamp(paddle.vx / 1400, -1.8, 1.8) : 0;
+    const spinMax = 1.8 * (1 + bon('spin'));
+    b.spin = Math.abs(paddle.vx) > 150 ? clamp(paddle.vx / 1400 * (1 + bon('spin')), -spinMax, spinMax) : 0;
+    b.rescued = false;
     if (Math.abs(b.spin) > 0.9) {
       floater(b.x, PADDLE_Y - 24, '¡CURVA!', '#7cf7ff', 14);
       Sfx.slice();
     }
-    const keep = [0, 0.25, 0.5, 0.75][up('keeper')];
+    const keep = Math.min(0.9, [0, 0.25, 0.5, 0.75][up('keeper')] + bon('memory'));
+    if (bon('pierce')) {
+      run.hits = (run.hits || 0) + 1;
+      if (run.hits % 8 === 0) { effects.fire = Math.max(effects.fire, 3); floater(b.x, PADDLE_Y - 40, 'PERFORACIÓN', '#ff5e1a', 14); }
+    }
     chain = Math.floor(chain * keep);
     if (effects.catch > 0 && !b.stuck) {
       b.stuck = true;
@@ -283,7 +328,7 @@ const Game = (() => {
       if (h) {
         reflect(b, h);
         b.bossCd = 0.08;
-        damageBoss(ballIsFire() ? 2 : effects.mega > 0 ? 3 : 1, b.x, b.y);
+        damageBoss(ballIsFire() ? 2 : isMega() ? 3 : 1, b.x, b.y);
         return;
       }
     }
@@ -309,14 +354,23 @@ const Game = (() => {
       reflect(b, h);
       if (Math.abs(b.spin) > 0.6) ach('slice');
       b.spin *= 0.7;
-      hitBrick(br, effects.mega > 0 ? 3 : 1, 'ball');
+      hitBrick(br, ballDamage(br, b), 'ball');
       return;
     }
   }
 
+  function ballDamage(br, b) {
+    let d = (isMega() ? 3 : 1) + bon('sharp') + (Math.abs(b.spin) > 0.3 ? bon('spinDmg') : 0);
+    if (Math.random() < bon('crit') + (Math.abs(b.spin) > 0.3 ? bon('spinCrit') : 0)) {
+      d *= 3;
+      floater(br.x + br.w / 2, br.y, 'CRÍTICO', '#ff4d6d', 14);
+    }
+    return d;
+  }
+
   function updateBalls(dt) {
     const spd = ballSpeed();
-    const targetR = effects.mega > 0 ? MEGA_R : BALL_R;
+    const targetR = isMega() ? MEGA_R : BALL_R;
     const fire = ballIsFire();
     for (let i = balls.length - 1; i >= 0; i--) {
       const b = balls[i];
@@ -363,7 +417,13 @@ const Game = (() => {
       if (fire && Math.random() < 0.5 && particles.length < 500) {
         particles.push({ x: b.x + rnd(-3, 3), y: b.y + rnd(-3, 3), vx: rnd(-30, 30), vy: rnd(-60, 0), life: 0.35, max: 0.35, color: Math.random() < 0.5 ? '#ffb347' : '#ff4d1a', size: rnd(2, 4), g: -100 });
       }
-      if (b.y - b.r > H) balls.splice(i, 1);
+      if (b.y - b.r > BARRIER_Y + 20 && b.vy > 0 && !b.rescued && Math.random() < bon('rescue')) {
+        b.rescued = true;
+        b.vy = -Math.abs(b.vy);
+        ring(b.x, BARRIER_Y + 20, '#ff4fd8', 60);
+        floater(b.x, BARRIER_Y, '¡RESCATE!', '#ff4fd8', 14);
+        Sfx.barrier();
+      } else if (b.y - b.r > H) balls.splice(i, 1);
     }
   }
 
@@ -408,11 +468,23 @@ const Game = (() => {
       chainCounts[chainId] = (chainCounts[chainId] || 0) + 1;
       if (chainCounts[chainId] >= 10) ach('chain10');
     }
-    if (br.mystery) spawnCapsule(cx, cy);
-    else if (Math.random() < dropChance() * (source === 'explosion' ? 0.5 : 1)) spawnCapsule(cx, cy);
-    const nc = br.coins || (Math.random() < 0.05 ? 1 : 0);
+    if (br.mystery || Math.random() < dropChance() * (source === 'explosion' ? 0.5 : 1)) {
+      spawnCapsule(cx, cy);
+      if (Math.random() < bon('doubleDrop')) spawnCapsule(cx + 14, cy - 6);
+    }
+    const nc = br.coins ? br.coins + bon('coinsExtra') : (Math.random() < 0.05 ? 1 : 0);
     for (let i = 0; i < nc; i++) spawnCoin(cx, cy);
     if (br.explosive) explosions.push({ x: cx, y: cy, t: 0.08, id: chainId || ++chainSeq });
+    else if (Math.random() < bon('powder')) explosions.push({ x: cx, y: cy, t: 0.08, id: chainId || ++chainSeq });
+    if (Math.random() < bon('echo') && balls.length < 40) {
+      const a = rnd(-0.6, 0.6), s = ballSpeed();
+      balls.push(newBall(cx, cy, Math.sin(a) * s, -Math.cos(a) * s));
+      floater(cx, cy - 12, 'ECO', '#7cf7ff', 12);
+    }
+    if (bon('vamp')) {
+      run.vamp = (run.vamp || 0) + bon('vamp');
+      if (run.vamp >= 1) { run.vamp -= 1; run.lives++; floater(cx, cy, '+1 VIDA', '#ff4fd8', 16); Sfx.life(); }
+    }
   }
 
   function updateBricks(dt) {
@@ -446,21 +518,143 @@ const Game = (() => {
       for (const br of bricks) {
         if (!br.alive) continue;
         const cx = br.x + br.w / 2, cy = br.y + br.h / 2;
-        if (Math.abs(cx - e.x) <= BW * 1.05 && Math.abs(cy - e.y) <= BH * 1.1) hitBrick(br, 99, 'explosion', e.id);
+        const bl = 1 + bon('blast');
+        if (Math.abs(cx - e.x) <= BW * 1.05 * bl && Math.abs(cy - e.y) <= BH * 1.1 * bl) hitBrick(br, 99, 'explosion', e.id);
       }
       for (const en of enemies) if (!en.dead && Math.hypot(en.x - e.x, en.y - e.y) < 70) killEnemy(en);
     }
   }
 
+  // ---------- Habilidades activas (árbol) ----------
+  let actSlowT = 0, beamT = 0, beamTick = 0;
+  const actCd = [0, 0, 0];
+  const ACT_Y = [PADDLE_Y - 96, PADDLE_Y - 96, PADDLE_Y - 154], ACT_X = [FL + 30, FR - 30, FL + 30];
+  const actCdMax = id => ACTIVES[id].cd * (1 - Math.min(0.6, bon('cdr')));
+  function actSlots() { return live() ? Skills.equipped() : []; }
+  function resetActives() {
+    actSlowT = 0; beamT = 0;
+    const eq = actSlots();
+    for (let i = 0; i < 3; i++) actCd[i] = eq[i] ? actCdMax(eq[i]) * (1 - Math.min(1, bon('actStart'))) : 0;
+  }
+
+  function useActive(i) {
+    const id = actSlots()[i];
+    if (!id || actCd[i] > 0 || state !== 'play' || clearT >= 0 || deathT >= 0) return;
+    actCd[i] = actCdMax(id);
+    const a = ACTIVES[id];
+    banner = { text: a.name.toUpperCase(), sub: '', t: 0.9, color: '#7cf7ff' };
+    Sfx.power();
+    switch (id) {
+      case 'pulse':
+        for (const b of balls.slice(0, 8)) {
+          ring(b.x, b.y, '#7cf7ff', 95);
+          burst(b.x, b.y, '#7cf7ff', 18, 260);
+          for (const br of bricks) {
+            if (br.alive && Math.hypot(br.x + br.w / 2 - b.x, br.y + br.h / 2 - b.y) < 80) hitBrick(br, 2, 'explosion');
+          }
+          for (const e of enemies) if (Math.hypot(e.x - b.x, e.y - b.y) < 90) killEnemy(e);
+          if (boss && Math.hypot(boss.x - b.x, boss.y - b.y) < 140) damageBoss(3, b.x, b.y);
+        }
+        shake = Math.max(shake, 8);
+        break;
+      case 'recall':
+        for (const b of balls) { b.stuck = true; b.stuckOff = rnd(-paddle.w * 0.3, paddle.w * 0.3); b.stuckT = 0; b.trail.length = 0; }
+        ring(paddle.x, PADDLE_Y, '#22d3ee', 80);
+        break;
+      case 'vacuum':
+        for (const c of capsules) { c.x = paddle.x; c.y = PADDLE_Y; }
+        for (const c of coins) { c.x = paddle.x + rnd(-10, 10); c.y = PADDLE_Y; c.vy = 0; }
+        ring(paddle.x, PADDLE_Y, '#e879f9', 120);
+        break;
+      case 'barrage': {
+        const targets = bricks.filter(b => b.alive && !b.metal).sort(() => Math.random() - 0.5).slice(0, 10);
+        targets.forEach((b, k) => explosions.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, t: 0.12 + k * 0.12, id: ++chainSeq }));
+        break;
+      }
+      case 'multiply': splitBalls(); break;
+      case 'shield': barrier = Math.min(4, barrier + 2); ring(W / 2, BARRIER_Y, '#2ec4f1', 200); break;
+      case 'fever': if (feverT <= 0) startFever(); break;
+      case 'goldrain': for (let k = 0; k < 20; k++) spawnCoin(rnd(40, W - 40), TOP + rnd(0, 60), true); break;
+      case 'bullettime': actSlowT = 5; flash = 0.3; flashColor = '#2dd4bf'; break;
+      case 'beam': beamT = 1.4; beamTick = 0; shake = Math.max(shake, 6); break;
+    }
+  }
+
+  function updateActives(dt) {
+    for (let i = 0; i < 3; i++) if (actCd[i] > 0) actCd[i] = Math.max(0, actCd[i] - dt);
+    if (actSlowT > 0) actSlowT -= dt;
+    if (beamT > 0) {
+      beamT -= dt;
+      beamTick -= dt;
+      const x0 = paddle.x - 18, x1 = paddle.x + 18;
+      for (const br of bricks) if (br.alive && !br.metal && br.x < x1 && br.x + br.w > x0) hitBrick(br, 99, 'laser');
+      for (const e of enemies) if (!e.dead && e.x > x0 - e.r && e.x < x1 + e.r) killEnemy(e);
+      for (let j = bullets.length - 1; j >= 0; j--) if (bullets[j].x > x0 && bullets[j].x < x1) bullets.splice(j, 1);
+      if (boss && !boss.dying && !boss.dead && beamTick <= 0 && Math.abs(boss.x - paddle.x) < boss.w / 2 + 18) {
+        damageBoss(1, paddle.x, boss.y + boss.h / 2);
+        beamTick = 0.12;
+      }
+      if (Math.random() < 0.6) burst(paddle.x + rnd(-14, 14), rnd(TOP, PADDLE_Y), '#fff6b0', 2, 120);
+    }
+  }
+
+  function drawActives() {
+    const eq = actSlots();
+    if (beamT > 0) {
+      const a = Math.min(1, beamT * 3);
+      const g = ctx.createLinearGradient(paddle.x - 22, 0, paddle.x + 22, 0);
+      g.addColorStop(0, 'rgba(255,240,150,0)');
+      g.addColorStop(0.5, `rgba(255,255,230,${0.9 * a})`);
+      g.addColorStop(1, 'rgba(255,240,150,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(paddle.x - 22, TOP, 44, PADDLE_Y - TOP);
+    }
+    if (actSlowT > 0) {
+      ctx.fillStyle = `rgba(45,212,191,${0.06 + 0.03 * Math.sin(gameTime * 6)})`;
+      ctx.fillRect(0, TOP, W, H - TOP);
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < eq.length; i++) {
+      const id = eq[i];
+      if (!id) continue;
+      const x = ACT_X[i], y = ACT_Y[i], ready = actCd[i] <= 0;
+      ctx.globalAlpha = ready ? 0.95 : 0.6;
+      ctx.fillStyle = 'rgba(10,8,30,0.8)';
+      ctx.beginPath(); ctx.arc(x, y, 21, 0, 7); ctx.fill();
+      ctx.strokeStyle = ready ? '#7cf7ff' : 'rgba(255,255,255,0.25)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x, y, 21, 0, 7); ctx.stroke();
+      if (!ready) {
+        const frac = 1 - actCd[i] / actCdMax(id);
+        ctx.strokeStyle = '#7cf7ff';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(x, y, 21, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke();
+      } else {
+        ctx.shadowColor = '#7cf7ff';
+        ctx.shadowBlur = 10 + 6 * Math.sin(gameTime * 5);
+        ctx.beginPath(); ctx.arc(x, y, 21, 0, 7); ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+      ctx.font = '18px system-ui, sans-serif';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(ACTIVES[id].icon, x, y + 1);
+      ctx.font = `700 9px ${FONT}`;
+      ctx.fillStyle = ready ? '#7cf7ff' : '#aab';
+      ctx.fillText(ready ? 'QER'[i] : Math.ceil(actCd[i]), x, y + 31);
+      ctx.globalAlpha = 1;
+    }
+  }
+
   // ---------- Puntaje, combo y fiebre ----------
   function addScore(base, x, y, color) {
-    const mult = comboMult() * (feverT > 0 ? 2 : 1) * (effects.double > 0 ? 2 : 1);
+    const mult = comboMult() * (feverT > 0 ? 2 : 1) * (effects.double > 0 ? 2 : 1) * (1 + bon('score'));
     const pts = Math.round(base * mult);
     run.score += pts;
     if (x != null) floater(x, y, '+' + pts, color || '#fff', mult >= 4 ? 17 : 13);
     while (run.score >= run.nextLife) {
       run.lives++;
-      run.nextLife += 50000;
+      run.nextLife += 50000 - Skills.val('lifeSooner');
       Sfx.life();
       banner = { text: '¡VIDA EXTRA!', sub: '', t: 1.4, color: '#ff4fd8' };
     }
@@ -483,14 +677,15 @@ const Game = (() => {
       floater(W / 2, H * 0.55, `COMBO x${m}`, `hsl(${(m * 45) % 360},95%,65%)`, 20 + m * 2);
     }
     if (feverT <= 0) {
-      fever += 3.2 * (1 + 0.2 * up('fever')) * (1 + chain * 0.03);
+      fever += 3.2 * (1 + 0.2 * up('fever') + bon('fever')) * (1 + chain * 0.03);
       if (fever >= 100) startFever();
     }
   }
 
   function startFever() {
     fever = 0;
-    feverDur = 6 + up('fever');
+    feverDur = 6 + up('fever') + bon('feverDur');
+    if (bon('frenzy')) splitBalls();
     feverT = feverDur;
     banner = { text: '¡FIEBRE!', sub: 'x2 puntos · bola de fuego', t: 1.6, color: '#ff5e1a' };
     flash = 0.5; flashColor = '#ff8c42';
@@ -501,14 +696,15 @@ const Game = (() => {
   }
 
   // ---------- Power-ups ----------
-  const dropChance = () => 0.11 + 0.025 * up('luck');
+  const dropChance = () => 0.11 + 0.025 * up('luck') + bon('luck');
 
   function pickPowerup() {
     const pool = Object.entries(POWERUPS).filter(([k]) => !(k === 'warp' && lvl.boss));
     let total = 0;
-    for (const [, p] of pool) total += p.w;
+    const weight = (p, k) => (p.good ? p.w * (k === 'multi' ? 1 + bon('multiWeight') : 1) : p.w * Math.max(0, 1 - bon('noBad')));
+    for (const [k, p] of pool) total += weight(p, k);
     let v = Math.random() * total;
-    for (const [k, p] of pool) { v -= p.w; if (v <= 0) return k; }
+    for (const [k, p] of pool) { v -= weight(p, k); if (v <= 0) return k; }
     return 'expand';
   }
 
@@ -519,7 +715,7 @@ const Game = (() => {
 
   function applyPowerup(type, silent) {
     const p = POWERUPS[type];
-    const dur = (p.dur || 0) * (1 + 0.15 * up('duration'));
+    const dur = (p.dur || 0) * (1 + 0.15 * up('duration') + bon('duration'));
     switch (type) {
       case 'expand': effects.expand = dur; effects.shrink = 0; break;
       case 'shrink': effects.shrink = dur; effects.expand = 0; break;
@@ -550,14 +746,14 @@ const Game = (() => {
     if (live() && Save.d.stats.powerups >= 50) ach('power50');
   }
 
-  function magnetPower() { return effects.magnet > 0 ? 5 : up('magnet') * 0.9; }
+  function magnetPower() { return effects.magnet > 0 ? 5 : Math.min(5, up('magnet') * 0.9 + bon('magnet')); }
 
   function updateCapsules(dt) {
     const mag = magnetPower();
     for (let i = capsules.length - 1; i >= 0; i--) {
       const c = capsules[i];
       c.t += dt;
-      c.y += 150 * dt;
+      c.y += 150 * (1 - Math.min(0.5, bon('capSlow'))) * dt;
       if (mag && c.y > H * 0.3) c.x += (paddle.x - c.x) * Math.min(1, mag * dt);
       if (c.y + 8 > PADDLE_Y && c.y - 8 < PADDLE_Y + PADDLE_H && Math.abs(c.x - paddle.x) < paddle.w / 2 + 18) {
         capsules.splice(i, 1);
@@ -588,7 +784,7 @@ const Game = (() => {
       else if (c.x > FR - 6) { c.x = FR - 6; c.vx = -Math.abs(c.vx) * 0.6; }
       if (c.y > PADDLE_Y - 8 && c.y < PADDLE_Y + PADDLE_H + 8 && Math.abs(c.x - paddle.x) < paddle.w / 2 + 8) {
         coins.splice(i, 1);
-        const v = 1 + 0.25 * up('greed');
+        const v = 1 + 0.25 * up('greed') + bon('coinVal');
         addCoins(v);
         lvl.coins += v;
         burst(c.x, c.y, '#ffcf33', 4, 100);
@@ -602,8 +798,9 @@ const Game = (() => {
     laserCd -= dt;
     if (effects.laser > 0 && (input.fire || run.demo) && laserCd <= 0 && !balls.some(b => b.stuck)) {
       const off = paddle.w / 2 - 7;
-      lasers.push({ x: paddle.x - off, y: PADDLE_Y - 4 }, { x: paddle.x + off, y: PADDLE_Y - 4 });
-      laserCd = 0.24 / (1 + 0.2 * up('gun'));
+      const pierce = Math.floor(bon('laserPierce'));
+      lasers.push({ x: paddle.x - off, y: PADDLE_Y - 4, pierce, last: null }, { x: paddle.x + off, y: PADDLE_Y - 4, pierce, last: null });
+      laserCd = 0.24 / (1 + 0.2 * up('gun') + bon('laserRate'));
       Sfx.laser();
     }
     outer:
@@ -612,9 +809,10 @@ const Game = (() => {
       l.y -= 950 * dt;
       if (l.y < TOP) { lasers.splice(i, 1); continue; }
       for (const br of bricks) {
-        if (br.alive && l.x > br.x && l.x < br.x + br.w && l.y < br.y + br.h && l.y + 14 > br.y) {
-          hitBrick(br, 1, 'laser');
+        if (br.alive && br !== l.last && l.x > br.x && l.x < br.x + br.w && l.y < br.y + br.h && l.y + 14 > br.y) {
+          hitBrick(br, 1 + bon('laserDmg'), 'laser');
           burst(l.x, br.y + br.h, '#ff8fa3', 3, 100);
+          if (l.pierce > 0 && !br.metal) { l.pierce--; l.last = br; continue; }
           lasers.splice(i, 1);
           continue outer;
         }
@@ -630,7 +828,7 @@ const Game = (() => {
         }
       }
       if (boss && !boss.dying && !boss.dead && Math.abs(l.x - boss.x) < boss.w / 2 && Math.abs(l.y - boss.y) < boss.h / 2) {
-        damageBoss(1, l.x, l.y);
+        damageBoss(1 + bon('laserDmg'), l.x, l.y);
         lasers.splice(i, 1);
       }
     }
@@ -651,16 +849,17 @@ const Game = (() => {
     Sfx.enemy();
     stat('enemies');
     if (live() && Save.d.stats.enemies >= 25) ach('enemy25');
-    if (Math.random() < 0.25) spawnCapsule(e.x, e.y);
+    if (bon('droneDrop') || Math.random() < 0.25) spawnCapsule(e.x, e.y);
     else spawnCoin(e.x, e.y);
+    for (let i = 0; i < bon('droneCoins'); i++) spawnCoin(e.x, e.y);
   }
 
   function updateEnemies(dt) {
-    if (!lvl.boss && run.level >= 3 && clearT < 0) {
+    if (!lvl.boss && (run.level >= 3 || mod('drones')) && clearT < 0) {
       enemyT -= dt;
       if (enemyT <= 0) {
-        enemyT = rnd(9, 16);
-        if (enemies.length < 1 + Math.floor(run.level / 6)) spawnEnemy(rnd(80, W - 80), TOP + 14);
+        enemyT = mod('drones') ? rnd(3, 5) : rnd(9, 16);
+        if (enemies.length < 1 + Math.floor(run.level / 6) + (mod('drones') ? 3 : 0)) spawnEnemy(rnd(80, W - 80), TOP + 14);
       }
     }
     for (let i = enemies.length - 1; i >= 0; i--) {
@@ -682,6 +881,7 @@ const Game = (() => {
 
   function damageBoss(dmg, x, y) {
     if (!boss || boss.dying || boss.dead) return;
+    dmg *= 1 + bon('bossDmg');
     boss.hp -= dmg;
     boss.flash = 1;
     registerChain();
@@ -734,7 +934,7 @@ const Game = (() => {
     if (boss.shootT <= 0) {
       const count = ph === 1 ? 1 : ph === 2 ? 3 : 5;
       const base = Math.atan2(PADDLE_Y - boss.y, paddle.x - boss.x);
-      const spd = 230 + 40 * ph + boss.n * 10;
+      const spd = (230 + 40 * ph + boss.n * 10) * (1 - Math.min(0.5, bon('bossSlow')));
       for (let k = 0; k < count; k++) {
         const a = base + (k - (count - 1) / 2) * 0.22;
         bullets.push({ x: boss.x, y: boss.y + boss.h / 2, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd });
@@ -754,7 +954,7 @@ const Game = (() => {
       b.y += b.vy * dt;
       if (b.y > PADDLE_Y - 4 && b.y < PADDLE_Y + PADDLE_H + 4 && Math.abs(b.x - paddle.x) < paddle.w / 2 + 4) {
         bullets.splice(i, 1);
-        paddle.stun = 0.7;
+        if (!bon('stunImmune')) paddle.stun = 0.7;
         chain = 0;
         shake = Math.max(shake, 8);
         flash = 0.25; flashColor = '#ff2d55';
@@ -769,7 +969,10 @@ const Game = (() => {
     let w = 96 * (1 + 0.08 * up('wide'));
     if (effects.expand > 0) w *= 1.55;
     if (effects.shrink > 0) w *= 0.6;
-    return w;
+    w *= 1 + bon('wide');
+    w *= 1 - bon('small');
+    if (mod('small')) w *= 0.8;
+    return Math.min(w, 300);
   }
 
   function updatePaddle(dt) {
@@ -861,6 +1064,7 @@ const Game = (() => {
     let d = dt;
     if (slowmoT > 0) { slowmoT -= dt; d = dt * 0.3; }
     lvl.time += d;
+    if (bon('cannon')) effects.laser = Math.max(effects.laser, 1);
     for (const k of EFFECT_KEYS) if (effects[k] > 0) effects[k] = Math.max(0, effects[k] - d);
     if (feverT > 0) { feverT -= d; if (feverT <= 0) { feverT = 0; Sfx.setIntensity(0); } }
     else fever = Math.max(0, fever - d * 3);
@@ -876,6 +1080,7 @@ const Game = (() => {
     updateBoss(d);
     updateBullets(d);
     updateFx(d);
+    updateActives(d);
 
     if (clearT < 0 && isCleared()) {
       clearT = lvl.warped ? 0.8 : 1.6;
@@ -894,7 +1099,16 @@ const Game = (() => {
       deathT -= dt;
       if (deathT <= 0) {
         deathT = -1;
-        if (run.lives <= 0) gameOver();
+        const treePhoenix = live() ? Skills.val('phoenix') - (run.phoenixUsed || 0) : 0;
+        if (run.lives <= 0 && (rel('phoenix') || treePhoenix > 0)) {
+          if (rel('phoenix')) { delete run.relics.phoenix; computeRelicBonus(); }
+          else { run.phoenixUsed = (run.phoenixUsed || 0) + 1; if (run.rogue) run.rogue.phoenixUsed = run.phoenixUsed; }
+          run.lives = 2;
+          banner = { text: '¡FÉNIX!', sub: 'Renaces de tus cenizas', t: 1.8, color: '#ff8c42' };
+          flash = 0.7; flashColor = '#ff8c42';
+          Sfx.life();
+          serveBall();
+        } else if (run.lives <= 0) gameOver();
         else serveBall();
       }
     } else if (balls.length === 0) loseLife();
@@ -906,8 +1120,8 @@ const Game = (() => {
     Sfx.quiet = false;
     Sfx.duck(false);
     run = {
-      mode, level: level || 1, score: 0, lives: mode === 'daily' ? 2 : 3 + up('lives'),
-      continues: 0, nextLife: 30000, bonusPaid: 0, demo: false, def: null,
+      mode, level: level || 1, score: 0, lives: mode === 'daily' ? 2 : 3 + up('lives') + Skills.val('lives'),
+      continues: 0, nextLife: 30000 - Skills.val('lifeSooner'), bonusPaid: 0, demo: false, def: null,
       rng: mode === 'daily' ? mulberry32(hashStr('arkanaid-' + todayStr())) : Math.random,
     };
     displayScore = 0;
@@ -915,6 +1129,20 @@ const Game = (() => {
     if (mode === 'daily') ach('daily');
     Save.save();
     startLevel();
+    UI.hideAll();
+  }
+
+  function startRogueLevel(R, def, mods, label) {
+    Sfx.init();
+    Sfx.quiet = false;
+    Sfx.duck(false);
+    run = {
+      mode: 'rogue', level: R.depth, score: R.score, lives: R.lives, continues: 0, nextLife: Infinity,
+      bonusPaid: 0, demo: false, def, mods, relics: R.relics, label, act: R.act, rng: Math.random,
+      rogue: R, phoenixUsed: R.phoenixUsed || 0,
+    };
+    displayScore = run.score;
+    startLevel(true);
     UI.hideAll();
   }
 
@@ -933,16 +1161,29 @@ const Game = (() => {
   function finishLevel() {
     if (run.demo) { startDemo(); return; }
     state = 'clear';
+    const xp = Math.floor((run.score - lvl.startScore) / 10) + 50 + (lvl.boss ? 150 : 0);
+    announceLevels(Progress.add(xp));
+    if (run.mode === 'rogue') {
+      addCoins(5 + run.level);
+      Save.save();
+      Rogue.onClear({ lives: run.lives, score: run.score, time: lvl.time, bricks: lvl.bricks, maxChain: lvl.maxChain, deaths: lvl.deaths });
+      return;
+    }
     const par = lvl.boss ? 100 : 20 + lvl.destructible * 0.5;
     const stars = 1 + (lvl.deaths === 0 ? 1 : 0) + (lvl.time <= par ? 1 : 0);
-    const reward = Math.round(8 + run.level * 2 + stars * 4 + (lvl.boss ? 25 : 0));
+    const reward = Math.round((8 + run.level * 2 + stars * 4 + (lvl.boss ? 25 : 0)) * (1 + bon('interest')));
+    let skillPts = 0, unlock = null;
     const timeBonus = lvl.warped ? 0 : Math.max(0, Math.round((par - lvl.time) * 50));
     run.score += timeBonus;
     addCoins(reward);
     if (lvl.deaths === 0) ach('flawless');
     if (lvl.time < 30 && !lvl.warped) ach('speedrun');
     if (run.mode === 'campaign') {
+      const firstClear = !Unlocks.cleared(run.level);
       if (stars > (Save.d.stars[run.level] || 0)) Save.d.stars[run.level] = stars;
+      unlock = firstClear ? Unlocks.grant(run.level) : null;
+      if (unlock) setTimeout(() => { Sfx.ach(); UI.toast(`🔓 ${unlock.icon} ${unlock.name}`, unlock.desc); }, 600);
+      skillPts = Skills.syncCampaign() + Skills.addXp(run.score - lvl.startScore);
       Save.d.unlocked = Math.max(Save.d.unlocked, Math.min(CAMPAIGN_LEN, run.level + 1));
       if (totalStars() >= 30) ach('stars30');
     }
@@ -951,7 +1192,7 @@ const Game = (() => {
     UI.showClear({
       level: run.level, name: lvl.name, stars, time: lvl.time, maxChain: lvl.maxChain,
       bricks: lvl.bricks, coins: Math.floor(lvl.coins), reward, timeBonus, score: run.score,
-      isLast: run.mode === 'campaign' && run.level >= CAMPAIGN_LEN, mode: run.mode,
+      isLast: run.mode === 'campaign' && run.level >= CAMPAIGN_LEN, mode: run.mode, skillPts, xp, unlock,
     });
   }
 
@@ -984,12 +1225,26 @@ const Game = (() => {
     return bonus;
   }
 
-  const continueCost = () => 100 * Math.pow(2, run.continues);
+  const continueCost = () => Math.round(100 * Math.pow(2, run.continues) * (1 - Skills.val('contDiscount')));
+
+  function announceLevels(gained) {
+    gained.forEach((g, i) => setTimeout(() => {
+      Sfx.ach();
+      UI.toast(`⬆ ¡NIVEL ${g.level}!`, `+${g.ph} PH · +${g.coins} monedas`);
+      if (g.milestone) setTimeout(() => UI.toast(`${g.milestone.icon} ${g.milestone.name}`, g.milestone.desc), 700);
+    }, 400 + i * 1400));
+  }
 
   function gameOver() {
     state = 'over';
+    if (live()) announceLevels(Progress.add((run.score - lvl.startScore) / 10));
     Sfx.setIntensity(0);
     Sfx.gameover();
+    if (run.mode === 'rogue') {
+      if (run.score > Save.d.highscore) Save.d.highscore = run.score;
+      Rogue.onDeath({ score: run.score });
+      return;
+    }
     const bonus = payScoreBonus();
     const rec = recordScore();
     Save.save();
@@ -1055,7 +1310,10 @@ const Game = (() => {
   function retry() { startRun(run.mode, run.mode === 'campaign' ? run.level : 1); }
 
   function toMenu() {
-    if (run && !run.demo && (state === 'play' || state === 'paused')) { payScoreBonus(); recordScore(); Save.save(); }
+    if (run && !run.demo && (state === 'play' || state === 'paused')) {
+      if (run.mode === 'rogue') Rogue.onAbandon();
+      else { payScoreBonus(); recordScore(); Save.save(); }
+    }
     startDemo();
     UI.show('menu');
   }
@@ -1072,6 +1330,10 @@ const Game = (() => {
     Sfx.init();
     if (state !== 'play' || run.demo) return;
     const p = toLogical(e);
+    const slots = actSlots();
+    for (let i = 0; i < slots.length; i++) {
+      if (slots[i] && Math.hypot(p.x - ACT_X[i], p.y - ACT_Y[i]) < 30) { useActive(i); e.preventDefault(); return; }
+    }
     input.touch = e.pointerType !== 'mouse';
     if (input.touch) { input.startX = p.x; input.startPaddle = paddle.x; input.px = paddle.x; }
     else input.px = p.x;
@@ -1096,6 +1358,12 @@ const Game = (() => {
     else if (k === 'ArrowRight' || k === 'KeyD') { input.right = true; input.px = null; }
     else if (k === 'Space' || k === 'ArrowUp' || k === 'KeyW') {
       if (state === 'play' && !run.demo) { input.fire = true; launch(); e.preventDefault(); }
+    } else if ((k === 'KeyQ' || k === 'Digit1') && state === 'play' && !run.demo) {
+      useActive(0);
+    } else if ((k === 'KeyE' || k === 'Digit2') && state === 'play' && !run.demo) {
+      useActive(1);
+    } else if ((k === 'KeyR' || k === 'Digit3') && state === 'play' && !run.demo) {
+      useActive(2);
     } else if (k === 'KeyP' || k === 'Escape') {
       if (state === 'play') pause(); else if (state === 'paused') resume();
     } else if (k === 'KeyM') {
@@ -1217,7 +1485,7 @@ const Game = (() => {
     ctx.translate(br.x + 1.5 + w / 2, br.y + 1.5 + h / 2);
     if (s !== 1) ctx.scale(s, s);
     ctx.translate(-w / 2, -h / 2);
-    if (br.hidden) {
+    if (br.hidden && !rel('eagle')) {
       ctx.globalAlpha = 0.08 + 0.07 * Math.sin(gameTime * 2.5 + br.col * 0.7 + br.row);
       ctx.strokeStyle = '#cfe0ff';
       ctx.lineWidth = 1;
@@ -1552,7 +1820,7 @@ const Game = (() => {
     ctx.textAlign = 'left';
     ctx.fillText('PUNTOS', 14, 20);
     ctx.textAlign = 'center';
-    ctx.fillText(run.mode === 'daily' ? 'DIARIO' : run.mode === 'endless' ? 'INFINITO' : 'NIVEL', W / 2, 20);
+    ctx.fillText(run.mode === 'daily' ? 'DIARIO' : run.mode === 'endless' ? 'INFINITO' : run.mode === 'rogue' ? `ROGUE · ACTO ${run.act}` : 'NIVEL', W / 2, 20);
     ctx.textAlign = 'right';
     ctx.fillText('MONEDAS', W - 50, 20);
 
@@ -1603,13 +1871,28 @@ const Game = (() => {
       ctx.fillText(`${chain} COMBO  x${m}`, FL + 10, TOP + (boss ? 34 : 18));
     }
 
+    // reliquias (rogue)
+    if (run.relics) {
+      let rx = FR - 14;
+      ctx.font = '14px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.globalAlpha = 0.85;
+      for (const [id, n] of Object.entries(run.relics)) {
+        if (!n || !ROGUE_RELICS[id] || rx < W / 2) continue;
+        ctx.fillText(ROGUE_RELICS[id].icon, rx, H - 14);
+        rx -= 20;
+      }
+      ctx.globalAlpha = 1;
+    }
+
     // power-ups activos
     let ex = FL + 8;
     ctx.textBaseline = 'middle';
     for (const k of EFFECT_KEYS) {
       if (effects[k] <= 0) continue;
       const p = POWERUPS[k];
-      const frac = effects[k] / (p.dur * (1 + 0.15 * up('duration')));
+      const frac = k === 'laser' && bon('cannon') ? 1 : effects[k] / (p.dur * (1 + 0.15 * up('duration') + bon('duration')));
       ctx.fillStyle = 'rgba(0,0,0,0.45)';
       rr(ex, H - 22, 44, 16, 8); ctx.fill();
       ctx.fillStyle = p.color;
@@ -1643,6 +1926,39 @@ const Game = (() => {
     ctx.restore();
   }
 
+  let darkCv = null, dctx = null;
+  function drawDarkness() {
+    if (!(mod('dark') || bon('dark'))) return;
+    if (!darkCv) {
+      darkCv = document.createElement('canvas');
+      darkCv.width = W / 2;
+      darkCv.height = H / 2;
+      dctx = darkCv.getContext('2d');
+    }
+    dctx.globalCompositeOperation = 'source-over';
+    dctx.clearRect(0, 0, W / 2, H / 2);
+    dctx.fillStyle = 'rgba(2,2,10,0.94)';
+    dctx.fillRect(0, 0, W / 2, H / 2);
+    dctx.globalCompositeOperation = 'destination-out';
+    const k = rel('eagle') ? 1.5 : 1;
+    const hole = (x, y, r) => {
+      const g = dctx.createRadialGradient(x / 2, y / 2, 0, x / 2, y / 2, r / 2);
+      g.addColorStop(0, 'rgba(0,0,0,1)');
+      g.addColorStop(0.55, 'rgba(0,0,0,0.85)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      dctx.fillStyle = g;
+      dctx.beginPath();
+      dctx.arc(x / 2, y / 2, r / 2, 0, 7);
+      dctx.fill();
+    };
+    for (const b of balls) hole(b.x, b.y, 120 * k);
+    hole(paddle.x, PADDLE_Y + 8, 150 * k);
+    for (const c of capsules) hole(c.x, c.y, 50);
+    for (const r of rings) hole(r.x, r.y, r.max * r.t * 1.3 + 30);
+    if (boss && !boss.dead) hole(boss.x, boss.y, 180);
+    ctx.drawImage(darkCv, 0, 0, W, H);
+  }
+
   function render(dt) {
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
     drawBackground();
@@ -1662,6 +1978,8 @@ const Game = (() => {
     drawBalls();
     drawFx();
     ctx.restore();
+    drawDarkness();
+    if (!run.demo) drawActives();
     if (!run.demo) { drawHUD(dt); drawBanner(); }
     if (flash > 0) {
       ctx.globalAlpha = flash * 0.5;
@@ -1691,7 +2009,7 @@ const Game = (() => {
   }
 
   return {
-    boot, startRun, nextLevel, retry, continueRun, pause, resume, restartLevel, toMenu, ach,
+    boot, startRun, startRogueLevel, nextLevel, retry, continueRun, pause, resume, restartLevel, toMenu, ach,
     todayStr, dateStr, totalStars, continueCost,
     isPlaying: () => state === 'play' && run && !run.demo,
     get run() { return run; },
