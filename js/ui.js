@@ -1,7 +1,7 @@
 // Pantallas DOM superpuestas al canvas: menú, tienda, logros, pausa, resultados.
 const UI = (() => {
   const $ = s => document.querySelector(s);
-  const SCREENS = ['menu', 'levels', 'shop', 'ach', 'settings', 'howto', 'pause', 'clear', 'over', 'victory', 'rogue', 'tree', 'profile'];
+  const SCREENS = ['menu', 'levels', 'shop', 'ach', 'settings', 'howto', 'pause', 'clear', 'over', 'victory', 'rogue', 'tree', 'profile', 'brief'];
   const fmt = n => Math.floor(n).toLocaleString('es-CL');
   const coin = '<i class="coin-ico"></i>';
   let current = null, backTo = 'menu', shopTab = 'upgrades', treeSel = null;
@@ -198,7 +198,7 @@ const UI = (() => {
       const d = Save.d;
       $('#lv-grid').innerHTML = LEVELS.map((l, i) => {
         const n = i + 1, locked = n > d.unlocked, st = d.stars[n] || 0;
-        return `<button class="lv ${l.boss ? 'boss' : ''} ${locked ? 'locked' : ''}" data-act="play-level" data-level="${n}" ${locked ? 'disabled' : ''}>
+        return `<button class="lv ${l.boss ? 'boss' : ''} ${locked ? 'locked' : ''}" data-act="brief" data-level="${n}" ${locked ? 'disabled' : ''}>
           <b>${locked ? '🔒' : l.boss ? '☠' : n}</b>
           <span class="lv-name">${l.boss ? 'JEFE' : l.name}</span>
           <span class="stars">${'★'.repeat(st)}<em>${'★'.repeat(3 - st)}</em></span>
@@ -211,12 +211,23 @@ const UI = (() => {
       const d = Save.d;
       $('#s-coins').textContent = fmt(d.coins);
       const skinsOpen = Unlocks.has('skins');
-      if (!skinsOpen) shopTab = 'upgrades';
+      if (!skinsOpen && shopTab === 'skins') shopTab = 'upgrades';
       $('#skinsTab').disabled = !skinsOpen;
       $('#skinsTab').textContent = skinsOpen ? 'Estilos' : `Estilos 🔒 N${Unlocks.levelOf('skins')}`;
       document.querySelectorAll('#scr-shop .tab').forEach(t => t.classList.toggle('on', t.dataset.tab === shopTab));
       let html = '';
-      if (shopTab === 'upgrades') {
+      if (shopTab === 'themes') {
+        html = '<div class="themes">' + Object.entries(THEMES).map(([id, t]) => {
+          const got = Theme.available(id), using = Theme.id === id, u = t.unlock;
+          const sw = t.swatch.map(c => `<i style="background:${c}"></i>`).join('');
+          let btn;
+          if (using) btn = '<button class="btn" disabled>En uso</button>';
+          else if (got) btn = `<button class="btn" data-act="theme" data-id="${id}">Usar</button>`;
+          else if (u.type === 'coins') btn = `<button class="btn" data-act="theme" data-id="${id}" ${d.coins < u.cost ? 'disabled' : ''}>${coin}${fmt(u.cost)}</button>`;
+          else btn = `<button class="btn" disabled>🔒 ${Theme.lockText(id)}</button>`;
+          return `<div class="theme-card ${using ? 'using' : ''}"><div class="sw">${sw}</div><b>${t.icon} ${t.name}</b><small>${t.desc}</small>${btn}</div>`;
+        }).join('') + '</div>';
+      } else if (shopTab === 'upgrades') {
         html = UPGRADES.map(u => {
           const lv = d.upgrades[u.id] || 0, maxed = lv >= u.max, cost = maxed ? 0 : u.cost(lv);
           if (u.adv && !Unlocks.has('advshop')) {
@@ -343,7 +354,32 @@ const UI = (() => {
   };
 
   // ---------- Pantallas de resultado ----------
+  // Lista de objetivos: ★1 superar el nivel + los dos del nivel.
+  function objList(n, live) {
+    const l = LEVELS[n - 1];
+    if (!l || !l.obj) return '';
+    const saved = Save.d.objectives[n] || [];
+    const cleared = (Save.d.stars[n] || 0) > 0;
+    const rows = [{ icon: '🏁', text: 'Supera el nivel', got: cleared, now: false }]
+      .concat(l.obj.map((o, i) => ({ icon: OBJECTIVES[o.type].icon, text: OBJECTIVES[o.type].text(o.n), got: !!saved[i], now: !!(live && live[i]) })));
+    return rows.map(r => `<div class="obj ${r.got || r.now ? 'got' : ''} ${r.now && !r.got ? 'new' : ''}">
+      <span class="st">${r.got || r.now ? '★' : '☆'}</span><span class="oi">${r.icon}</span><span>${r.text}</span>${r.now && !r.got ? '<em>¡en esta partida!</em>' : ''}</div>`).join('');
+  }
+
+  function showBrief(n) {
+    const l = LEVELS[n - 1], st = Save.d.stars[n] || 0, rw = CAMPAIGN_REWARDS[n];
+    $('#b-num').textContent = l.boss ? `Nivel ${n} · Jefe` : `Nivel ${n}`;
+    $('#b-name').textContent = l.name.replace('JEFE: ', '');
+    $('#b-stars').innerHTML = [0, 1, 2].map(i => `<span class="${i < st ? 'on' : ''}" style="animation-delay:${0.1 + i * 0.12}s">★</span>`).join('');
+    $('#b-objs').innerHTML = objList(n);
+    $('#b-reward').innerHTML = rw ? `<div class="unlock-card ${st ? 'claimed' : ''}"><span class="u-ico">${rw.icon}</span><div><small>${st ? 'YA DESBLOQUEADO' : 'PREMIO AL SUPERARLO'}</small><b>${rw.name}</b><em>${rw.desc}</em></div></div>` : '';
+    $('#b-play').dataset.level = n;
+    show('brief');
+  }
+
   function showPause() {
+    const g = Game.run && Game.run.mode === 'campaign' && Game.lvl;
+    $('#p-objs').innerHTML = g ? objList(Game.run.level, Game.lvl.objDone) : '';
     const rogue = Game.run && Game.run.mode === 'rogue';
     $('#p-restart').style.display = rogue ? 'none' : '';
     $('#p-home').textContent = rogue ? 'Abandonar nivel (−1 vida)' : 'Salir al menú';
@@ -358,8 +394,6 @@ const UI = (() => {
     $('#c-stats').innerHTML = [
       ['Tiempo', `${mm}:${String(ss).padStart(2, '0')}`],
       ['Combo máximo', r.maxChain],
-      ['Ladrillos', r.bricks],
-      ['Bono de tiempo', `+${fmt(r.timeBonus)}`],
       ['Monedas recogidas', `${coin}${fmt(r.coins)}`],
       ...(r.mode === 'campaign' ? [['Puntos de habilidad', `🌳 +${r.skillPts}`]] : []),
       ['Experiencia', `+${fmt(r.xp)} XP`],
@@ -367,11 +401,14 @@ const UI = (() => {
       ['Puntaje', fmt(r.score)],
     ].map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('');
     $('#c-next').innerHTML = r.isLast ? 'Ver final ▶' : 'Siguiente ▶';
+    $('#c-objs').innerHTML = r.objectives ? [{ icon: '🏁', text: 'Supera el nivel', done: true, had: true }].concat(r.objectives).map(o =>
+      `<div class="obj ${o.done || o.had ? 'got' : ''} ${o.isNew ? 'new' : ''}"><span class="st">${o.done || o.had ? '★' : '☆'}</span><span class="oi">${o.icon}</span><span>${o.text}</span>${o.isNew ? '<em>¡NUEVA!</em>' : !o.done && o.had ? '<em>ya la tenías</em>' : ''}</div>`).join('') : '';
     $('#c-unlock').innerHTML = r.unlock ? `<span class="u-ico">${r.unlock.icon}</span><div><small>¡DESBLOQUEADO!</small><b>${r.unlock.name}</b><em>${r.unlock.desc}</em></div>` : '';
     $('#c-unlock').style.display = r.unlock ? '' : 'none';
     const nextR = r.mode === 'campaign' && CAMPAIGN_REWARDS[r.level + 1] && !Unlocks.cleared(r.level + 1) ? CAMPAIGN_REWARDS[r.level + 1] : null;
     $('#c-nextr').textContent = nextR ? `Próximo desbloqueo: ${nextR.icon} ${nextR.name}` : '';
     show('clear');
+    announceThemes();
   }
 
   function showOver(r) {
@@ -397,6 +434,7 @@ const UI = (() => {
     ];
     $('#o-tip').textContent = '💡 ' + tips[Math.floor(Math.random() * tips.length)];
     show('over');
+    announceThemes();
   }
 
   function showVictory(r) {
@@ -422,6 +460,7 @@ const UI = (() => {
   const actions = {
     campaign: () => Game.startRun('campaign', Math.min(Save.d.unlocked, Game.CAMPAIGN_LEN)),
     'play-level': ds => Game.startRun('campaign', +ds.level),
+    brief: ds => showBrief(+ds.level),
     endless: () => Game.startRun('endless', 1),
     daily: () => Game.startRun('daily', 1),
     levels: () => open('levels'),
@@ -495,6 +534,13 @@ const UI = (() => {
     retry: () => Game.retry(),
     continue: () => Game.continueRun(),
     tab: ds => { shopTab = ds.tab; render.shop(); },
+    theme: ds => {
+      if (!Theme.available(ds.id) && !Theme.buy(ds.id)) return;
+      Theme.apply(ds.id);
+      Save.save();
+      Sfx.buy();
+      render.shop();
+    },
     buy: ds => {
       const u = UPGRADES.find(x => x.id === ds.id);
       if (u.adv && !Unlocks.has('advshop')) return;
@@ -533,6 +579,7 @@ const UI = (() => {
       if (!confirm('¿Borrar todo el progreso, monedas y logros? No se puede deshacer.')) return;
       Save.reset();
       Skills.invalidate();
+      Theme.apply('neon');
       Sfx.setSound(true);
       Sfx.setMusic(true);
       render.settings();
@@ -564,7 +611,14 @@ const UI = (() => {
     setTimeout(() => toast(`🎁 Bono diario: +${reward} monedas`, `Racha de ${s.count} día${s.count > 1 ? 's' : ''}. ¡Vuelve mañana por más!`), 700);
   }
 
+  // Avisa los temas que se acaban de desbloquear.
+  function announceThemes() {
+    Theme.checkNew().forEach((id, i) => setTimeout(() => toast(`🎨 Tema desbloqueado: ${THEMES[id].icon} ${THEMES[id].name}`, 'Actívalo en la tienda › Temas'), 1800 + i * 900));
+  }
+
   function boot() {
+    Theme.apply(Save.d.themes.current);
+    Theme.checkNew();
     claimDaily();
     const old = Skills.syncCampaign();
     if (old) { Save.save(); setTimeout(() => toast(`🌳 +${old} PH`, 'Por tu progreso en la campaña. ¡Revisa el árbol de habilidades!'), 1400); }
@@ -572,7 +626,7 @@ const UI = (() => {
     if (!Save.d.seenHowto) { Save.d.seenHowto = true; Save.save(); backTo = 'menu'; show('howto'); }
   }
 
-  return { show, hideAll, showPause, showClear, showOver, showVictory, toast, boot };
+  return { announceThemes, show, hideAll, showPause, showClear, showOver, showVictory, toast, boot };
 })();
 
 Game.boot();

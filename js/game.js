@@ -7,10 +7,25 @@ const Game = (() => {
   const PADDLE_Y = H - 72, PADDLE_H = 16, BARRIER_Y = H - 34, BALL_R = 7, MEGA_R = 12;
   const STEP = 1 / 120;
   const CAMPAIGN_LEN = LEVELS.length;
-  const FONT = '"Orbitron", "Rajdhani", system-ui, sans-serif';
+  let FONT = '"Orbitron", "Rajdhani", system-ui, sans-serif';
+  const F = (w, size) => `${w} ${Math.round(size * Theme.cur.fontScale * 10) / 10}px ${FONT}`;
 
   const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
+  const mainCtx = canvas.getContext('2d');
+  let ctx = mainCtx;
+  // Tema Pixel CRT: el mundo se dibuja a media resolución y se amplía sin suavizado.
+  const pixCv = document.createElement('canvas');
+  pixCv.width = W / 2;
+  pixCv.height = H / 2;
+  const pixCtx = pixCv.getContext('2d');
+  // El brillo (shadowBlur) se escala según el tema: 0 lo apaga en los temas planos.
+  const blurDesc = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'shadowBlur');
+  for (const c of [mainCtx, pixCtx]) {
+    Object.defineProperty(c, 'shadowBlur', {
+      get() { return blurDesc.get.call(this); },
+      set(v) { blurDesc.set.call(this, v * Theme.cur.glow); },
+    });
+  }
   let scale = 1, dpr = 1;
 
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -156,6 +171,8 @@ const Game = (() => {
     boss = def.boss ? makeBoss(def.boss) : null;
     lvl = {
       time: 0, deaths: 0, bricks: 0, coins: 0, negatives: 0, maxChain: 0,
+      maxBalls: 1, powerups: 0, explBricks: 0, fevers: 0, sliceBricks: 0, drones: 0, coinPickups: 0, hits: 0,
+      obj: run.mode === 'campaign' && def.obj ? def.obj : null, objDone: [false, false], objT: 0,
       name: def.name, boss: !!def.boss, startScore: run.score, warped: false,
       destructible: bricks.filter(b => !b.metal).length, mods: run.mods || [],
     };
@@ -188,7 +205,8 @@ const Game = (() => {
     const modTxt = lvl.mods.map(m => ROGUE_MODS[m].icon + ' ' + ROGUE_MODS[m].name).join('  ');
     banner = {
       text: run.mode === 'rogue' ? run.label : run.mode === 'campaign' ? `NIVEL ${run.level}/${CAMPAIGN_LEN}` : `NIVEL ${run.level}`,
-      sub: modTxt ? `${def.name} · ${modTxt}` : def.name, t: 2.4, color: boss ? '#ff4d6d' : lvl.mods.length ? '#ff8c42' : '#7c5cff',
+      sub: modTxt ? `${def.name} · ${modTxt}` : def.name, t: lvl.obj ? 3.2 : 2.4, color: boss ? '#ff4d6d' : lvl.mods.length ? '#ff8c42' : '#7c5cff',
+      objs: lvl.obj,
     };
     state = 'play';
     Sfx.setIntensity(0);
@@ -350,11 +368,13 @@ const Game = (() => {
       if (b.x + b.r < br.x || b.x - b.r > br.x + br.w || b.y + b.r < br.y || b.y - b.r > br.y + br.h) continue;
       const h = circleRect(b, br.x, br.y, br.w, br.h);
       if (!h) continue;
-      if (fire && !br.metal) { hitBrick(br, 99, 'ball'); continue; }
+      if (fire && !br.metal) { curBall = b; hitBrick(br, 99, 'ball'); curBall = null; continue; }
       reflect(b, h);
       if (Math.abs(b.spin) > 0.6) ach('slice');
       b.spin *= 0.7;
+      curBall = b;
       hitBrick(br, ballDamage(br, b), 'ball');
+      curBall = null;
       return;
     }
   }
@@ -457,6 +477,8 @@ const Game = (() => {
     burst(cx, cy, br.color, 14, 260);
     Sfx.brick(chain);
     lvl.bricks++;
+    if (source === 'explosion') lvl.explBricks++;
+    if (source === 'ball' && curBall && Math.abs(curBall.spin) > 0.3) lvl.sliceBricks++;
     stat('bricks');
     ach('first');
     if (live()) {
@@ -639,7 +661,7 @@ const Game = (() => {
       ctx.font = '18px system-ui, sans-serif';
       ctx.fillStyle = '#fff';
       ctx.fillText(ACTIVES[id].icon, x, y + 1);
-      ctx.font = `700 9px ${FONT}`;
+      ctx.font = F(700, 9);
       ctx.fillStyle = ready ? '#7cf7ff' : '#aab';
       ctx.fillText(ready ? 'QER'[i] : Math.ceil(actCd[i]), x, y + 31);
       ctx.globalAlpha = 1;
@@ -692,6 +714,7 @@ const Game = (() => {
     Sfx.fever();
     Sfx.setIntensity(1);
     stat('fevers');
+    lvl.fevers++;
     ach('fever');
   }
 
@@ -743,6 +766,7 @@ const Game = (() => {
     floater(paddle.x, PADDLE_Y - 30, p.name, p.color, 16);
     ring(paddle.x, PADDLE_Y, p.color, 70);
     stat('powerups');
+    lvl.powerups++;
     if (live() && Save.d.stats.powerups >= 50) ach('power50');
   }
 
@@ -787,6 +811,7 @@ const Game = (() => {
         const v = 1 + 0.25 * up('greed') + bon('coinVal');
         addCoins(v);
         lvl.coins += v;
+        lvl.coinPickups++;
         burst(c.x, c.y, '#ffcf33', 4, 100);
         if (gameTime - lastCoinSfx > 0.05) { Sfx.coin(); lastCoinSfx = gameTime; }
       } else if (c.y > H + 10) coins.splice(i, 1);
@@ -848,6 +873,7 @@ const Game = (() => {
     ring(e.x, e.y, '#7cf7ff', 45);
     Sfx.enemy();
     stat('enemies');
+    lvl.drones++;
     if (live() && Save.d.stats.enemies >= 25) ach('enemy25');
     if (bon('droneDrop') || Math.random() < 0.25) spawnCapsule(e.x, e.y);
     else spawnCoin(e.x, e.y);
@@ -956,6 +982,7 @@ const Game = (() => {
         bullets.splice(i, 1);
         if (!bon('stunImmune')) paddle.stun = 0.7;
         chain = 0;
+        lvl.hits++;
         shake = Math.max(shake, 8);
         flash = 0.25; flashColor = '#ff2d55';
         burst(b.x, b.y, '#ff4d6d', 14, 220);
@@ -1081,6 +1108,8 @@ const Game = (() => {
     updateBullets(d);
     updateFx(d);
     updateActives(d);
+    if (balls.length > lvl.maxBalls) lvl.maxBalls = balls.length;
+    if (lvl.obj && (lvl.objT -= d) <= 0) { lvl.objT = 0.2; checkObjectives(); }
 
     if (clearT < 0 && isCleared()) {
       clearT = lvl.warped ? 0.8 : 1.6;
@@ -1170,7 +1199,16 @@ const Game = (() => {
       return;
     }
     const par = lvl.boss ? 100 : 20 + lvl.destructible * 0.5;
-    const stars = 1 + (lvl.deaths === 0 ? 1 : 0) + (lvl.time <= par ? 1 : 0);
+    let stars = 1 + (lvl.deaths === 0 ? 1 : 0) + (lvl.time <= par ? 1 : 0);
+    let objectives = null;
+    if (lvl.obj) {
+      const res = objectiveResults();
+      const prev = Save.d.objectives[run.level] || [false, false];
+      const merged = prev.map((p, i) => p || res[i]);
+      Save.d.objectives[run.level] = merged;
+      objectives = lvl.obj.map((o, i) => ({ icon: OBJECTIVES[o.type].icon, text: OBJECTIVES[o.type].text(o.n), done: res[i], had: prev[i], isNew: res[i] && !prev[i] }));
+      stars = 1 + merged.filter(Boolean).length;
+    }
     const reward = Math.round((8 + run.level * 2 + stars * 4 + (lvl.boss ? 25 : 0)) * (1 + bon('interest')));
     let skillPts = 0, unlock = null;
     const timeBonus = lvl.warped ? 0 : Math.max(0, Math.round((par - lvl.time) * 50));
@@ -1182,7 +1220,7 @@ const Game = (() => {
       const firstClear = !Unlocks.cleared(run.level);
       if (stars > (Save.d.stars[run.level] || 0)) Save.d.stars[run.level] = stars;
       unlock = firstClear ? Unlocks.grant(run.level) : null;
-      if (unlock) setTimeout(() => { Sfx.ach(); UI.toast(`🔓 ${unlock.icon} ${unlock.name}`, unlock.desc); }, 600);
+      if (unlock) setTimeout(() => Sfx.ach(), 600);
       skillPts = Skills.syncCampaign() + Skills.addXp(run.score - lvl.startScore);
       Save.d.unlocked = Math.max(Save.d.unlocked, Math.min(CAMPAIGN_LEN, run.level + 1));
       if (totalStars() >= 30) ach('stars30');
@@ -1192,7 +1230,35 @@ const Game = (() => {
     UI.showClear({
       level: run.level, name: lvl.name, stars, time: lvl.time, maxChain: lvl.maxChain,
       bricks: lvl.bricks, coins: Math.floor(lvl.coins), reward, timeBonus, score: run.score,
-      isLast: run.mode === 'campaign' && run.level >= CAMPAIGN_LEN, mode: run.mode, skillPts, xp, unlock,
+      isLast: run.mode === 'campaign' && run.level >= CAMPAIGN_LEN, mode: run.mode, skillPts, xp, unlock, objectives,
+    });
+  }
+
+  // ---------- Objetivos de estrellas ----------
+  let curBall = null;
+  function objStats() {
+    return {
+      time: lvl.time, deaths: lvl.deaths, hits: lvl.hits, maxChain: lvl.maxChain, maxBalls: lvl.maxBalls,
+      powerups: lvl.powerups, explBricks: lvl.explBricks, fevers: lvl.fevers, sliceBricks: lvl.sliceBricks,
+      drones: lvl.drones, coinPickups: lvl.coinPickups, score: run.score - lvl.startScore,
+    };
+  }
+  function checkObjectives() {
+    const s = objStats();
+    lvl.obj.forEach((o, i) => {
+      const def = OBJECTIVES[o.type];
+      if (lvl.objDone[i] || !def.live || !def.live(s, o.n)) return;
+      lvl.objDone[i] = true;
+      Sfx.combo(4);
+      floater(W / 2, H * 0.42, `★ ${def.text(o.n)}`, '#ffcf33', 16);
+      ring(W / 2, H * 0.42, '#ffcf33', 90);
+    });
+  }
+  function objectiveResults() {
+    const s = objStats();
+    return lvl.obj.map((o, i) => {
+      const def = OBJECTIVES[o.type];
+      return lvl.objDone[i] || (def.live ? def.live(s, o.n) : def.end(s, o.n));
     });
   }
 
@@ -1435,10 +1501,23 @@ const Game = (() => {
   const easeOutBack = t => 1 + 2.7 * Math.pow(t - 1, 3) + 1.7 * Math.pow(t - 1, 2);
   const skinColor = kind => {
     const s = SKINS[kind].find(x => x.id === Save.d.skin[kind]) || SKINS[kind][0];
+    if (s.id === 'classic') return Theme.cur[kind];
     return s.color === 'rainbow' ? `hsl(${(gameTime * 140) % 360},95%,62%)` : s.color;
   };
 
+  Theme.onChange(t => {
+    FONT = t.fontHud || t.font;
+    gradCache.clear();
+    hexCv = null;
+    scanCv = null;
+  });
+
   function drawBackground() {
+    const kind = Theme.cur.bg;
+    if (kind === 'synth') return bgSynth();
+    if (kind === 'pixel') return bgPixel();
+    if (kind === 'pastel') return bgPastel();
+    if (kind === 'tron') return bgTron();
     const lvHue = run ? 200 + (run.level * 47) % 120 : 260;
     const hue = feverT > 0 ? (gameTime * 200) % 360 : lvHue;
     const g = ctx.createLinearGradient(0, 0, 0, H);
@@ -1462,9 +1541,144 @@ const Game = (() => {
     ctx.globalAlpha = 1;
   }
 
+  function bgSynth() {
+    const hz = H * 0.6, sp = feverT > 0 ? 3 : 1;
+    const sky = ctx.createLinearGradient(0, 0, 0, hz);
+    sky.addColorStop(0, '#0d0221');
+    sky.addColorStop(0.6, '#2d0b4e');
+    sky.addColorStop(1, '#8a1f6b');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, hz);
+    for (const s of stars) {
+      if (s.y > hz) continue;
+      ctx.globalAlpha = s.z * 0.7;
+      ctx.fillStyle = '#ffd6f5';
+      ctx.fillRect(s.x, s.y, s.z * 2, s.z * 2);
+    }
+    ctx.globalAlpha = 1;
+    // sol a rayas
+    const sr = 120, sy = hz - 20;
+    const sun = ctx.createLinearGradient(0, sy - sr, 0, sy + sr * 0.3);
+    sun.addColorStop(0, '#ffd319');
+    sun.addColorStop(0.55, '#ff8c42');
+    sun.addColorStop(1, '#ff2a6d');
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W, hz);
+    ctx.clip();
+    ctx.shadowColor = '#ff2a6d';
+    ctx.shadowBlur = 40;
+    ctx.fillStyle = sun;
+    ctx.beginPath();
+    ctx.arc(W / 2, sy, sr, 0, 7);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#5a1458';
+    for (let i = 0; i < 6; i++) {
+      const y = sy - 10 + i * 13 + ((gameTime * 6 * sp) % 13);
+      ctx.fillRect(W / 2 - sr, y, sr * 2, 2 + i * 1.3);
+    }
+    ctx.restore();
+    // suelo con cuadrícula en perspectiva
+    ctx.fillStyle = '#12002a';
+    ctx.fillRect(0, hz, W, H - hz);
+    ctx.strokeStyle = 'rgba(255,42,109,0.75)';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = '#ff2a6d';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    for (let i = -14; i <= 14; i++) { ctx.moveTo(W / 2 + i * 8, hz); ctx.lineTo(W / 2 + i * 90, H); }
+    const N = 10, t = (gameTime * 0.35 * sp) % 1;
+    for (let k = 0; k < N; k++) {
+      const f = (k + t) / N, y = hz + (H - hz) * f * f;
+      ctx.moveTo(0, y); ctx.lineTo(W, y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ff71ce';
+    ctx.fillRect(0, hz - 1, W, 2);
+  }
+
+  function bgPixel() {
+    ctx.fillStyle = feverT > 0 ? '#262b44' : '#0f0f1b';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#3a4466';
+    for (let y = TOP; y < H; y += 48) for (let x = 24; x < W; x += 48) ctx.fillRect(x, y + ((gameTime * 10) % 48), 2, 2);
+    for (const s of stars) {
+      ctx.fillStyle = s.z > 0.7 ? '#ffffff' : s.z > 0.4 ? '#8b9bb4' : '#3a4466';
+      ctx.fillRect(Math.round(s.x / 2) * 2, Math.round(s.y / 2) * 2, 2, 2);
+    }
+  }
+
+  function bgPastel() {
+    ctx.fillStyle = '#f4efe6';
+    ctx.fillRect(0, 0, W, H);
+    const blobs = [['#f4c7c7', 0.13, 120], ['#c9e6d2', 0.17, 150], ['#cdd9f5', 0.11, 170], ['#f6e3b8', 0.15, 110], ['#e2d4f5', 0.09, 140]];
+    blobs.forEach(([c, sp, r], i) => {
+      ctx.globalAlpha = feverT > 0 ? 0.75 : 0.5;
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.arc(W / 2 + Math.sin(gameTime * sp + i * 2) * 220, H / 2 + Math.cos(gameTime * sp * 0.8 + i * 1.3) * 300, r, 0, 7);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#e4d9c8';
+    for (let y = TOP + 15; y < H; y += 30) for (let x = 15; x < W; x += 30) ctx.fillRect(x, y, 2, 2);
+  }
+
+  let hexCv = null, scanCv = null;
+  function bgTron() {
+    ctx.fillStyle = '#02040a';
+    ctx.fillRect(0, 0, W, H);
+    if (!hexCv) {
+      hexCv = document.createElement('canvas');
+      hexCv.width = W;
+      hexCv.height = H;
+      const h = hexCv.getContext('2d'), R = 18, dx = R * Math.sqrt(3);
+      h.strokeStyle = '#0c3442';
+      h.lineWidth = 1;
+      for (let row = 0, y = 0; y < H + R; row++, y += R * 1.5) {
+        for (let x = (row % 2) * dx / 2; x < W + dx; x += dx) {
+          h.beginPath();
+          for (let k = 0; k < 6; k++) { const a = Math.PI / 6 + k * Math.PI / 3; h.lineTo(x + Math.cos(a) * R, y + Math.sin(a) * R); }
+          h.closePath();
+          h.stroke();
+        }
+      }
+    }
+    ctx.globalAlpha = feverT > 0 ? 1 : 0.75;
+    ctx.drawImage(hexCv, 0, 0, W, H);
+    ctx.globalAlpha = 1;
+    const sy = TOP + ((gameTime * 140) % (H - TOP));
+    const g = ctx.createLinearGradient(0, sy - 60, 0, sy);
+    g.addColorStop(0, 'rgba(0,229,255,0)');
+    g.addColorStop(1, 'rgba(0,229,255,0.12)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, sy - 60, W, 60);
+    ctx.fillStyle = 'rgba(0,229,255,0.5)';
+    ctx.fillRect(0, sy, W, 1);
+  }
+
+  function drawScanlines() {
+    if (!scanCv) {
+      scanCv = document.createElement('canvas');
+      scanCv.width = W;
+      scanCv.height = H;
+      const c = scanCv.getContext('2d');
+      c.fillStyle = 'rgba(0,0,0,0.22)';
+      for (let y = 0; y < H; y += 3) c.fillRect(0, y, W, 1);
+      const v = c.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.75);
+      v.addColorStop(0, 'rgba(0,0,0,0)');
+      v.addColorStop(1, 'rgba(0,0,0,0.45)');
+      c.fillStyle = v;
+      c.fillRect(0, 0, W, H);
+    }
+    ctx.drawImage(scanCv, 0, 0, W, H);
+  }
+
   function drawWalls() {
-    const col = feverT > 0 ? `hsl(${(gameTime * 200) % 360},90%,60%)` : '#7c5cff';
-    ctx.fillStyle = 'rgba(20,16,50,0.9)';
+    const col = feverT > 0 ? `hsl(${(gameTime * 200) % 360},90%,60%)` : Theme.cur.wall;
+    ctx.fillStyle = Theme.cur.light ? '#e9e1d4' : Theme.cur.pixel ? '#262b44' : 'rgba(20,16,50,0.9)';
     ctx.fillRect(0, TOP - 4, FL, H);
     ctx.fillRect(FR, TOP - 4, W - FR, H);
     ctx.fillRect(0, TOP - 4, W, 4);
@@ -1485,21 +1699,55 @@ const Game = (() => {
     ctx.translate(br.x + 1.5 + w / 2, br.y + 1.5 + h / 2);
     if (s !== 1) ctx.scale(s, s);
     ctx.translate(-w / 2, -h / 2);
+    const style = Theme.cur.bricks, color = Theme.color(br.color);
+    const rad = style === 'pixel' ? 0 : style === 'pastel' ? h / 2 : style === 'outline' ? 2 : 4;
     if (br.hidden && !rel('eagle')) {
       ctx.globalAlpha = 0.08 + 0.07 * Math.sin(gameTime * 2.5 + br.col * 0.7 + br.row);
-      ctx.strokeStyle = '#cfe0ff';
+      ctx.strokeStyle = Theme.cur.light ? '#8a8275' : '#cfe0ff';
       ctx.lineWidth = 1;
       rr(0.5, 0.5, w - 1, h - 1, 4);
       ctx.stroke();
       ctx.restore();
       return;
     }
-    ctx.fillStyle = brickGrad(br.color, h);
-    rr(0, 0, w, h, 4);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.28)';
-    rr(2, 1.5, w - 4, h * 0.3, 3);
-    ctx.fill();
+    if (style === 'pixel') {
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = shade(color, 0.4);
+      ctx.fillRect(0, 0, w, 3);
+      ctx.fillRect(0, 0, 2, h);
+      ctx.fillStyle = shade(color, -0.4);
+      ctx.fillRect(0, h - 3, w, 3);
+      ctx.fillRect(w - 2, 0, 2, h);
+    } else if (style === 'pastel') {
+      ctx.fillStyle = shade(color, -0.18);
+      rr(0, 2, w, h - 2, rad);
+      ctx.fill();
+      ctx.fillStyle = color;
+      rr(0, 0, w, h - 2, rad);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.beginPath(); ctx.arc(h / 2 + 1, h / 2 - 2, 2.2, 0, 7); ctx.fill();
+    } else if (style === 'outline') {
+      const life = isFinite(br.maxHp) ? br.hp / br.maxHp : 1;
+      ctx.globalAlpha = br.metal ? 0.3 : 0.1 + 0.28 * life;
+      ctx.fillStyle = color;
+      rr(1, 1, w - 2, h - 2, rad);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.6;
+      rr(1, 1, w - 2, h - 2, rad);
+      ctx.stroke();
+      if (br.metal) { ctx.lineWidth = 1; rr(4, 4, w - 8, h - 8, 1); ctx.stroke(); }
+    } else {
+      ctx.fillStyle = brickGrad(color, h);
+      rr(0, 0, w, h, rad);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.28)';
+      rr(2, 1.5, w - 4, h * 0.3, 3);
+      ctx.fill();
+    }
 
     if (br.metal || br.gold) {
       ctx.save();
@@ -1528,11 +1776,11 @@ const Game = (() => {
       ctx.beginPath(); ctx.arc(w / 2 + 5, h / 2 - 5, 2 + pulse * 1.5, 0, 7); ctx.fill();
     } else if (br.coinBrick || br.gold) {
       ctx.fillStyle = 'rgba(90,50,0,0.75)';
-      ctx.font = `700 13px ${FONT}`;
+      ctx.font = F(700, 13);
       ctx.fillText('$', w / 2, h / 2 + 1);
     } else if (br.mystery) {
       ctx.fillStyle = `hsl(${(gameTime * 160 + br.col * 30) % 360},100%,80%)`;
-      ctx.font = `900 14px ${FONT}`;
+      ctx.font = F(900, 14);
       ctx.fillText('?', w / 2, h / 2 + 1);
     } else if (br.regen) {
       ctx.fillStyle = 'rgba(255,255,255,0.7)';
@@ -1555,7 +1803,7 @@ const Game = (() => {
     }
     if (br.flash > 0) {
       ctx.fillStyle = `rgba(255,255,255,${br.flash * 0.75})`;
-      rr(0, 0, w, h, 4);
+      rr(0, 0, w, h, rad);
       ctx.fill();
     }
     ctx.restore();
@@ -1659,7 +1907,7 @@ const Game = (() => {
       rr(-15, -6, 30, 5, 3);
       ctx.fill();
       ctx.fillStyle = p.good ? '#0b0b1e' : '#fff';
-      ctx.font = `900 11px ${FONT}`;
+      ctx.font = F(900, 11);
       ctx.fillText(p.label, 0, 1);
       ctx.restore();
     }
@@ -1684,10 +1932,11 @@ const Game = (() => {
       ctx.save();
       ctx.translate(e.x, e.y);
       ctx.rotate(e.t * 2.4);
-      ctx.strokeStyle = '#7cf7ff';
-      ctx.fillStyle = 'rgba(124,247,255,0.18)';
+      const ec = Theme.cur.enemy;
+      ctx.strokeStyle = ec;
+      ctx.fillStyle = ec + '2e';
       ctx.lineWidth = 2;
-      ctx.shadowColor = '#7cf7ff';
+      ctx.shadowColor = ec;
       ctx.shadowBlur = 10;
       ctx.beginPath();
       if (e.kind === 0) { for (let i = 0; i < 3; i++) { const a = i * 2.094; ctx.lineTo(Math.cos(a) * e.r, Math.sin(a) * e.r); } ctx.closePath(); }
@@ -1747,7 +1996,7 @@ const Game = (() => {
     ctx.fillStyle = boss.color;
     rr(bx, by, bw * boss.hp / boss.maxHp, 8, 4); ctx.fill();
     ctx.fillStyle = '#fff';
-    ctx.font = `700 9px ${FONT}`;
+    ctx.font = F(700, 9);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText(boss.name.toUpperCase(), W / 2, by + 11);
@@ -1789,7 +2038,7 @@ const Game = (() => {
     ctx.textBaseline = 'middle';
     for (const f of floaters) {
       ctx.globalAlpha = 1 - f.t / f.life;
-      ctx.font = `800 ${f.size}px ${FONT}`;
+      ctx.font = F(800, f.size);
       ctx.lineWidth = 3;
       ctx.strokeStyle = 'rgba(0,0,0,0.6)';
       ctx.strokeText(f.text, f.x, f.y);
@@ -1812,11 +2061,12 @@ const Game = (() => {
   function drawHUD(dt) {
     displayScore += (run.score - displayScore) * Math.min(1, dt * 10);
     if (Math.abs(run.score - displayScore) < 1) displayScore = run.score;
-    ctx.fillStyle = 'rgba(6,4,20,0.92)';
+    const hud = Theme.cur.hud;
+    ctx.fillStyle = hud.bg;
     ctx.fillRect(0, 0, W, TOP - 4);
     ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = '#8c90b8';
-    ctx.font = `700 10px ${FONT}`;
+    ctx.fillStyle = hud.muted;
+    ctx.font = F(700, 10);
     ctx.textAlign = 'left';
     ctx.fillText('PUNTOS', 14, 20);
     ctx.textAlign = 'center';
@@ -1824,16 +2074,16 @@ const Game = (() => {
     ctx.textAlign = 'right';
     ctx.fillText('MONEDAS', W - 50, 20);
 
-    ctx.fillStyle = '#fff';
-    ctx.font = `800 20px ${FONT}`;
+    ctx.fillStyle = hud.text;
+    ctx.font = F(800, 20);
     ctx.textAlign = 'left';
     ctx.fillText(fmt(displayScore), 14, 45);
     ctx.textAlign = 'center';
-    ctx.font = `800 16px ${FONT}`;
+    ctx.font = F(800, 16);
     ctx.fillText(run.mode === 'campaign' ? `${run.level}/${CAMPAIGN_LEN}` : `${run.level}`, W / 2, 40);
     ctx.textAlign = 'right';
-    ctx.fillStyle = '#ffcf33';
-    ctx.font = `800 18px ${FONT}`;
+    ctx.fillStyle = hud.coin;
+    ctx.font = F(800, 18);
     ctx.fillText(fmt(Save.d.coins), W - 50, 45);
 
     // vidas
@@ -1844,7 +2094,7 @@ const Game = (() => {
       rr(lx + i * 18 + 2, 47, 14, 5, 2.5);
       ctx.fill();
     }
-    if (run.lives > 8) { ctx.fillStyle = '#fff'; ctx.font = `700 9px ${FONT}`; ctx.textAlign = 'left'; ctx.fillText(`+${run.lives - 8}`, lx + 8 * 18 + 3, 53); }
+    if (run.lives > 8) { ctx.fillStyle = hud.text; ctx.font = F(700, 9); ctx.textAlign = 'left'; ctx.fillText(`+${run.lives - 8}`, lx + 8 * 18 + 3, 53); }
 
     // medidor de fiebre
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
@@ -1866,7 +2116,7 @@ const Game = (() => {
       const sz = 14 + comboPulse * 6 + Math.min(m, 8);
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.font = `900 ${sz}px ${FONT}`;
+      ctx.font = F(900, sz);
       ctx.fillStyle = `hsl(${(m * 45) % 360},95%,65%)`;
       ctx.fillText(`${chain} COMBO  x${m}`, FL + 10, TOP + (boss ? 34 : 18));
     }
@@ -1886,6 +2136,20 @@ const Game = (() => {
       ctx.globalAlpha = 1;
     }
 
+    // objetivos de estrellas (campaña)
+    if (lvl.obj) {
+      const saved = Save.d.objectives[run.level] || [];
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.font = F(700, 10);
+      lvl.obj.forEach((o, i) => {
+        const def = OBJECTIVES[o.type], done = lvl.objDone[i], had = saved[i];
+        const lt = Theme.cur.light;
+        ctx.fillStyle = done ? (lt ? '#c98a1b' : '#ffcf33') : had ? (lt ? 'rgba(201,138,27,0.6)' : 'rgba(255,207,51,0.55)') : (lt ? '#8a8275' : 'rgba(220,225,255,0.6)');
+        ctx.fillText(`${done ? '★' : had ? '☆' : '○'} ${def.text(o.n)}`, FR - 8, TOP + (boss ? 30 : 14) + i * 15);
+      });
+    }
+
     // power-ups activos
     let ex = FL + 8;
     ctx.textBaseline = 'middle';
@@ -1899,7 +2163,7 @@ const Game = (() => {
       rr(ex, H - 22, 44 * Math.min(1, frac), 16, 8); ctx.fill();
       ctx.fillStyle = '#fff';
       ctx.textAlign = 'center';
-      ctx.font = `800 10px ${FONT}`;
+      ctx.font = F(800, 10);
       ctx.fillText(p.label, ex + 22, H - 13.5);
       ex += 50;
     }
@@ -1907,21 +2171,29 @@ const Game = (() => {
 
   function drawBanner() {
     if (!banner) return;
-    const a = Math.min(1, banner.t * 2, (2.6 - banner.t) * 4);
+    const a = Math.min(1, banner.t * 2, ((banner.objs ? 3.4 : 2.6) - banner.t) * 4);
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, a));
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `900 40px ${FONT}`;
+    ctx.font = F(900, 40);
     ctx.shadowColor = banner.color || '#7c5cff';
     ctx.shadowBlur = 24;
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = Theme.cur.light ? '#3b352d' : '#fff';
     ctx.fillText(banner.text, W / 2, H * 0.5);
     ctx.shadowBlur = 0;
     if (banner.sub) {
-      ctx.font = `700 16px ${FONT}`;
+      ctx.font = F(700, 16);
       ctx.fillStyle = banner.color || '#b9a8ff';
       ctx.fillText(banner.sub, W / 2, H * 0.5 + 38);
+    }
+    if (banner.objs) {
+      ctx.font = F(700, 13);
+      const saved = Save.d.objectives[run.level] || [];
+      ['★ Supera el nivel', ...banner.objs.map((o, i) => `${saved[i] ? '★' : '☆'} ${OBJECTIVES[o.type].text(o.n)}`)].forEach((t, i) => {
+        ctx.fillStyle = i === 0 || saved[i - 1] ? '#ffcf33' : '#dfe3ff';
+        ctx.fillText(t, W / 2, H * 0.5 + 72 + i * 22);
+      });
     }
     ctx.restore();
   }
@@ -1960,9 +2232,12 @@ const Game = (() => {
   }
 
   function render(dt) {
-    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+    const pix = Theme.cur.pixel;
+    ctx = pix ? pixCtx : mainCtx;
+    if (pix) ctx.setTransform(0.5, 0, 0, 0.5, 0, 0);
+    else ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
     drawBackground();
-    if (!run) return;
+    if (!run) { finishPixel(pix); return; }
     ctx.save();
     if (shake > 0 && Save.d.settings.shake) ctx.translate(rnd(-shake, shake), rnd(-shake, shake));
     drawWalls();
@@ -1980,6 +2255,7 @@ const Game = (() => {
     ctx.restore();
     drawDarkness();
     if (!run.demo) drawActives();
+    finishPixel(pix);
     if (!run.demo) { drawHUD(dt); drawBanner(); }
     if (flash > 0) {
       ctx.globalAlpha = flash * 0.5;
@@ -1988,6 +2264,16 @@ const Game = (() => {
       ctx.globalAlpha = 1;
     }
     canvas.style.cursor = state === 'play' && !run.demo ? 'none' : 'default';
+  }
+
+  function finishPixel(pix) {
+    if (!pix) return;
+    ctx = mainCtx;
+    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(pixCv, 0, 0, W, H);
+    ctx.imageSmoothingEnabled = true;
+    drawScanlines();
   }
 
   let last = performance.now(), acc = 0;
@@ -2013,6 +2299,7 @@ const Game = (() => {
     todayStr, dateStr, totalStars, continueCost,
     isPlaying: () => state === 'play' && run && !run.demo,
     get run() { return run; },
+    get lvl() { return lvl; },
     CAMPAIGN_LEN,
     // depuración: avanza la simulación n pasos fijos sin renderizar
     _sim(n) { for (let i = 0; i < n; i++) update(STEP); return { state, level: run.level, t: lvl.time, balls: balls.length, bricks: bricks.filter(b => b.alive && !b.metal).length, boss: boss && boss.hp, bx: balls[0] && balls[0].x, spin: Math.max(0, ...balls.map(b => Math.abs(b.spin))) }; },
